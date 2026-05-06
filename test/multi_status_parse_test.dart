@@ -89,6 +89,23 @@ void main() {
       expect(response.responseDescription, 'The resource is currently locked.');
       expect(response.locationHref, '/locks/info');
     });
+
+    test('failure messages include response descriptions', () {
+      const xml = '''
+<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/locked.txt</d:href>
+    <d:status>HTTP/1.1 423 Locked</d:status>
+    <d:responsedescription>Submit a lock token.</d:responsedescription>
+  </d:response>
+</d:multistatus>
+''';
+
+      final failures = parseMultiStatusFailureMessages(xml);
+      expect(failures.single, contains('423 Locked'));
+      expect(failures.single, contains('Submit a lock token.'));
+    });
   });
 
   group('parseMultiStatusToMap', () {

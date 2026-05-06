@@ -56,7 +56,16 @@ class WebdavFile {
 
   @override
   String toString() {
-    return 'WebdavFile{path: $path, isDir: $isDir, name: $name, mimeType: $mimeType, size: $size, eTag: $eTag, created: $created, modified: $modified}';
+    return 'WebdavFile{'
+        'path: $path, '
+        'isDir: $isDir, '
+        'name: $name, '
+        'mimeType: $mimeType, '
+        'size: $size, '
+        'eTag: $eTag, '
+        'created: $created, '
+        'modified: $modified'
+        '}';
   }
 
   /// Parse a WebDAV XML response to a list of WebdavFile objects
@@ -130,8 +139,10 @@ class WebdavFile {
     final size = isDir ? null : getIntValue(prop, 'getcontentlength');
 
     // Created time
-    final cTimeStr = getElementText(prop, 'creationdate');
-    final cTime = cTimeStr != null ? DateTime.tryParse(cTimeStr) : null;
+    final cTimeStr = getElementText(prop, 'creationdate')?.trim();
+    final parsedCreation =
+        cTimeStr != null ? DateTime.tryParse(cTimeStr) : null;
+    final cTime = parsedCreation?.toLocal();
 
     // Modified time
     final mTimeStr = getElementText(prop, 'getlastmodified');
@@ -220,33 +231,56 @@ int? _extractStatusCode(String statusText) {
   return int.tryParse(match.group(1)!);
 }
 
-/// Parse HTTP date format to DateTime
+/// Parse HTTP date formats accepted by RFC 9110 §5.6.7.
 DateTime? _parseHttpDate(String? httpDate) {
   if (httpDate == null) return null;
 
-  try {
-    final pattern = RegExp(
-      r'(\w{3}), (\d{2}) (\w{3}) (\d{4}) (\d{2}):(\d{2}):(\d{2}) GMT',
-      caseSensitive: false,
-    );
-    final match = pattern.firstMatch(httpDate);
+  final value = httpDate.trim();
+  if (value.isEmpty) return null;
 
-    if (match != null) {
-      final day = match.group(2)!.padLeft(2, '0');
-      final month = _monthMap[match.group(3)!.toLowerCase()];
-      final year = match.group(4);
-      final time = '${match.group(5)}:${match.group(6)}:${match.group(7)}';
-
-      if (month != null) {
-        return DateTime.parse('$year-$month-${day}T${time}Z').toLocal();
-      }
+  DateTime? parseMatch(RegExpMatch match, int dayIndex, int monthIndex,
+      int yearIndex, int hourIndex, int minuteIndex, int secondIndex) {
+    final month = _monthNumbers[match.group(monthIndex)!.toLowerCase()];
+    if (month == null) return null;
+    var year = int.parse(match.group(yearIndex)!);
+    if (year < 100) {
+      year += year >= 70 ? 1900 : 2000;
     }
-
-    // Fallback for any other formats
-    return DateTime.tryParse(httpDate);
-  } catch (_) {
-    return null;
+    return DateTime.utc(
+      year,
+      month,
+      int.parse(match.group(dayIndex)!),
+      int.parse(match.group(hourIndex)!),
+      int.parse(match.group(minuteIndex)!),
+      int.parse(match.group(secondIndex)!),
+    ).toLocal();
   }
+
+  final imf = RegExp(
+    r'^[A-Za-z]{3},\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+'
+    r'(\d{2}):(\d{2}):(\d{2})\s+[A-Za-z0-9:+-]+$',
+  ).firstMatch(value);
+  if (imf != null) {
+    return parseMatch(imf, 1, 2, 3, 4, 5, 6);
+  }
+
+  final rfc850 = RegExp(
+    r'^[A-Za-z]+,\s+(\d{1,2})-([A-Za-z]{3})-(\d{2})\s+'
+    r'(\d{2}):(\d{2}):(\d{2})\s+[A-Za-z0-9:+-]+$',
+  ).firstMatch(value);
+  if (rfc850 != null) {
+    return parseMatch(rfc850, 1, 2, 3, 4, 5, 6);
+  }
+
+  final asctime = RegExp(
+    r'^[A-Za-z]{3}\s+([A-Za-z]{3})\s+(\d{1,2})\s+'
+    r'(\d{2}):(\d{2}):(\d{2})\s+(\d{4})$',
+  ).firstMatch(value);
+  if (asctime != null) {
+    return parseMatch(asctime, 2, 1, 6, 3, 4, 5);
+  }
+
+  return DateTime.tryParse(value)?.toLocal();
 }
 
 String _decodeHrefValue(String href) {
@@ -256,6 +290,21 @@ String _decodeHrefValue(String href) {
     return href;
   }
 }
+
+const _monthNumbers = {
+  'jan': 1,
+  'feb': 2,
+  'mar': 3,
+  'apr': 4,
+  'may': 5,
+  'jun': 6,
+  'jul': 7,
+  'aug': 8,
+  'sep': 9,
+  'oct': 10,
+  'nov': 11,
+  'dec': 12,
+};
 
 String _normalizeHrefForComparison(
   String href, {
@@ -310,18 +359,3 @@ String _normalizeHrefForComparison(
 
   return value;
 }
-
-const _monthMap = {
-  'jan': '01',
-  'feb': '02',
-  'mar': '03',
-  'apr': '04',
-  'may': '05',
-  'jun': '06',
-  'jul': '07',
-  'aug': '08',
-  'sep': '09',
-  'oct': '10',
-  'nov': '11',
-  'dec': '12',
-};

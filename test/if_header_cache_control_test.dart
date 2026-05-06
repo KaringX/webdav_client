@@ -79,6 +79,33 @@ void main() {
     expect(pragma, equals('no-cache, custom'));
   });
 
+  test('conditionalPut trims bracketed lock tokens in If header', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() async => server.close(force: true));
+
+    String? ifHeader;
+
+    server.listen((request) async {
+      ifHeader = request.headers.value('if');
+      await request.drain();
+      request.response.statusCode = HttpStatus.created;
+      await request.response.close();
+    });
+
+    final client = WebdavClient.noAuth(
+      url: 'http://${server.address.host}:${server.port}',
+    );
+
+    await client.conditionalPut(
+      '/file.txt',
+      Uint8List.fromList([1]),
+      lockToken: ' <opaquelocktoken:trimmed> ',
+    );
+
+    expect(ifHeader, contains('(<opaquelocktoken:trimmed>)'));
+    expect(ifHeader, isNot(contains('<<')));
+  });
+
   test('conditionalPut keeps lock tokens positive while negating etags',
       () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);

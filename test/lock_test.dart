@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'dart:io';
 
 import 'package:test/test.dart';
@@ -78,6 +79,41 @@ void main() {
 
     final token = await client.lock('/resource.txt');
     expect(token, equals('opaquelocktoken:body-only'));
+  });
+
+  test('lock can send structured XML owner per RFC 4918 §14.17', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() async => server.close(force: true));
+
+    String? body;
+
+    server.listen((request) async {
+      if (request.method == 'LOCK') {
+        body = await utf8.decoder.bind(request).join();
+        request.response
+          ..statusCode = HttpStatus.ok
+          ..headers.add('Lock-Token', '<opaquelocktoken:xml-owner>')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
+          ..write('<d:prop xmlns:d="DAV:"/>');
+      } else {
+        request.response.statusCode = HttpStatus.notFound;
+      }
+      await request.response.close();
+    });
+
+    final client = WebdavClient.noAuth(
+      url: 'http://${server.address.host}:${server.port}',
+    );
+
+    final token = await client.lock(
+      '/resource.txt',
+      ownerXml: '<d:href xmlns:d="DAV:">mailto:user@example.com</d:href>',
+    );
+
+    expect(token, 'opaquelocktoken:xml-owner');
+    expect(body, contains('<d:owner>'));
+    expect(body, contains('mailto:user@example.com'));
   });
 
   test('lock advertises timeout preferences per RFC 4918 §10.7', () async {

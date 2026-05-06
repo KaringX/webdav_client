@@ -85,4 +85,33 @@ void main() {
     expect(refreshIfHeader, equals(ifHeader));
     expect(refreshBody, isEmpty);
   });
+
+  test('refreshLock convenience builds If header from token', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() async => server.close(force: true));
+
+    String? capturedIf;
+    String? capturedBody;
+
+    server.listen((request) async {
+      capturedIf = request.headers.value('if');
+      capturedBody = await utf8.decoder.bind(request).join();
+      request.response.statusCode = HttpStatus.ok;
+      await request.response.close();
+    });
+
+    final client = WebdavClient.noAuth(
+      url: 'http://${server.address.host}:${server.port}/dav',
+    );
+
+    final token = await client.refreshLock(
+      '/file.txt',
+      'opaquelocktoken:refresh',
+    );
+
+    expect(token, 'opaquelocktoken:refresh');
+    expect(capturedIf, contains('<opaquelocktoken:refresh>'));
+    expect(capturedIf, contains('/dav/file.txt'));
+    expect(capturedBody, isEmpty);
+  });
 }

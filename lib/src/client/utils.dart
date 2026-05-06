@@ -205,9 +205,11 @@ List<String> parsePropPatchFailureMessages(String xmlString) {
         final propNames =
             propstat.properties.values.map(_formatPropertyName).toList();
         final statusText = propstat.rawStatus ?? 'HTTP status $status';
+        final description = response.responseDescription;
+        final descriptionSuffix = description == null ? '' : '. $description';
         failures.add(
           'Failed to update properties for ${response.href}: '
-          '$statusText. Failed props: $propNames',
+          '$statusText. Failed props: $propNames$descriptionSuffix',
         );
       }
     }
@@ -224,7 +226,11 @@ List<String> parseMultiStatusFailureMessages(String xmlString) {
     final status = response.statusCode;
     if (status != null && status >= 400) {
       final statusText = response.rawStatus ?? 'HTTP status $status';
-      failures.add('Failed to process ${response.href}: $statusText');
+      final description = response.responseDescription;
+      final descriptionSuffix = description == null ? '' : '. $description';
+      failures.add(
+        'Failed to process ${response.href}: $statusText$descriptionSuffix',
+      );
     }
 
     for (final propstat in response.propstats) {
@@ -236,8 +242,11 @@ List<String> parseMultiStatusFailureMessages(String xmlString) {
       final props =
           propstat.properties.values.map(_formatPropertyName).toList();
       final propsSuffix = props.isEmpty ? '' : '. Props: $props';
+      final description = response.responseDescription;
+      final descriptionSuffix = description == null ? '' : '. $description';
       failures.add(
-        'Failed to process ${response.href}: $statusText$propsSuffix',
+        'Failed to process ${response.href}: '
+        '$statusText$propsSuffix$descriptionSuffix',
       );
     }
   }
@@ -318,6 +327,14 @@ extension _Utils on WebdavClient {
     return trimmed.isEmpty ? null : trimmed;
   }
 
+  String _formatLockTokenHeader(String lockToken) {
+    final trimmed = lockToken.trim();
+    if (trimmed.startsWith('<') && trimmed.endsWith('>')) {
+      return trimmed;
+    }
+    return '<$trimmed>';
+  }
+
   String? _extractLockTokenFromIfHeader(String ifHeader) {
     final regex = RegExp(r'<([^>]+)>');
     final matches = regex.allMatches(ifHeader);
@@ -348,8 +365,7 @@ extension _Utils on WebdavClient {
     final conditionElements = <String>[];
     if (lockToken != null) {
       // Lock tokens prove knowledge per RFC 4918 §7.5, so they must remain positive.
-      final formattedLockToken =
-          lockToken.startsWith('<') ? lockToken : '<$lockToken>';
+      final formattedLockToken = _formatLockTokenHeader(lockToken);
       conditionElements.add(formattedLockToken);
     }
 

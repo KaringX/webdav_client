@@ -24,6 +24,16 @@ String sha512Hash(String data) {
   return digest.toString();
 }
 
+/// Compute a SHA-512/256 hash for [data] and return the lowercase hex digest.
+///
+/// HTTP Digest names this algorithm `SHA-512-256` (RFC 7616 §3.9.1), which is
+/// not the same digest as taking the first 256 bits of SHA-512.
+String sha512256Hash(String data) {
+  final bytes = utf8.encode(data);
+  final digest = crypto.sha512256.convert(bytes);
+  return digest.toString();
+}
+
 /// Produce a cryptographically secure nonce for Digest authentication.
 String computeNonce() {
   final rnd = Random.secure();

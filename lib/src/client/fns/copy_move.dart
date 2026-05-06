@@ -20,6 +20,7 @@ extension WebdavClientCopyMove on WebdavClient {
     CancelToken? cancelToken,
     PropsDepth? depth,
     String? ifHeader,
+    Map<String, dynamic>? headers,
   }) {
     if (depth != null && depth != PropsDepth.infinity) {
       throw ArgumentError(
@@ -35,6 +36,7 @@ extension WebdavClientCopyMove on WebdavClient {
       cancelToken: cancelToken,
       depth: PropsDepth.infinity,
       ifHeader: ifHeader,
+      headers: headers,
     );
   }
 
@@ -56,6 +58,7 @@ extension WebdavClientCopyMove on WebdavClient {
     CancelToken? cancelToken,
     PropsDepth? depth,
     String? ifHeader,
+    Map<String, dynamic>? headers,
   }) {
     return rename(
       oldPath,
@@ -64,6 +67,7 @@ extension WebdavClientCopyMove on WebdavClient {
       cancelToken: cancelToken,
       depth: depth,
       ifHeader: ifHeader,
+      headers: headers,
     );
   }
 
@@ -77,7 +81,7 @@ extension WebdavClientCopyMove on WebdavClient {
   ///
   /// **Warning:**
   /// If copied the folder (A > B), it will copy all the contents of folder A to folder B.
-  /// Some webdav services have been tested and found to **delete** the original contents of the B folder.
+  /// Some WebDAV services may **delete** existing contents in the target folder.
   Future<void> copy(
     String oldPath,
     String newPath, {
@@ -85,6 +89,7 @@ extension WebdavClientCopyMove on WebdavClient {
     CancelToken? cancelToken,
     String? ifHeader,
     PropsDepth depth = PropsDepth.infinity,
+    Map<String, dynamic>? headers,
   }) {
     if (depth == PropsDepth.one) {
       throw ArgumentError(
@@ -100,6 +105,7 @@ extension WebdavClientCopyMove on WebdavClient {
       cancelToken: cancelToken,
       ifHeader: ifHeader,
       depth: depth,
+      headers: headers,
     );
   }
 }

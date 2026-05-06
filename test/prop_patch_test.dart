@@ -48,5 +48,25 @@ void main() {
       expect(failures.single, contains('423 Locked'));
       expect(failures.single, contains('custom:prop'));
     });
+
+    test('includes response description in failure diagnostics', () {
+      const xml = '''
+<?xml version="1.0" encoding="utf-8"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/failed.txt</d:href>
+    <d:responsedescription>Property is protected.</d:responsedescription>
+    <d:propstat>
+      <d:prop><d:getetag /></d:prop>
+      <d:status>HTTP/1.1 409 Conflict</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>
+''';
+
+      final failures = parsePropPatchFailureMessages(xml);
+      expect(failures.single, contains('409 Conflict'));
+      expect(failures.single, contains('Property is protected.'));
+    });
   });
 }
