@@ -20,6 +20,17 @@ String joinPath(String path0, String path1) {
 }
 
 /// Resolve [target] against [baseUrl] in a WebDAV-aware manner.
+///
+/// Preserves percent-encoding of special characters (such as `%2F` for `/`)
+/// that would otherwise be decoded and lost through `Uri.pathSegments`.
+///
+/// Mirrors SabreDAV's `Client::getAbsoluteUrl` helper:
+/// - Absolute URIs are returned verbatim.
+/// - Network-path references (`//host/path`) adopt the base scheme.
+/// - For path-only targets we split the raw string (preserving encoding),
+///   compute dot-segment normalization on raw segments, and then decide
+///   whether to replace or append to the base path using the same prefix
+///   logic as the original `resolveAgainstBaseUrl`.
 String resolveAgainstBaseUrl(String baseUrl, String target) {
   final trimmed = target.trim();
   if (trimmed.isEmpty) {
@@ -40,92 +51,123 @@ String resolveAgainstBaseUrl(String baseUrl, String target) {
     return Uri.parse('$scheme:$trimmed').toString();
   }
 
-  final targetUri = Uri.parse(trimmed);
-  final baseSegments = _withoutTrailingEmpty(baseUri.pathSegments);
-  final targetSegments = _withoutTrailingEmpty(targetUri.pathSegments);
+  // Extract raw path, query, fragment preserving percent-encoding.
+  var rawTarget = trimmed;
+  String? query;
+  String? fragment;
 
-  final combinedSegments = <String>[];
-  if (trimmed.startsWith('/')) {
-    final matchesPrefix = _segmentsHavePrefix(targetSegments, baseSegments);
-    if (targetSegments.isEmpty) {
-      combinedSegments.addAll(baseSegments);
-    } else if (matchesPrefix) {
-      combinedSegments.addAll(targetSegments);
-    } else if (baseSegments.isNotEmpty &&
-        targetSegments.first != baseSegments.first) {
-      combinedSegments
-        ..addAll(baseSegments)
-        ..addAll(targetSegments);
-    } else {
-      combinedSegments.addAll(targetSegments);
-    }
-  } else {
-    combinedSegments
-      ..addAll(baseSegments)
-      ..addAll(targetSegments);
+  final fi = rawTarget.indexOf('#');
+  if (fi != -1) {
+    fragment = rawTarget.substring(fi + 1);
+    rawTarget = rawTarget.substring(0, fi);
+  }
+  final qi = rawTarget.indexOf('?');
+  if (qi != -1) {
+    query = rawTarget.substring(qi + 1);
+    rawTarget = rawTarget.substring(0, qi);
   }
 
-  final normalizedSegments = _removeDotSegments(combinedSegments);
+  // Split raw path into segments preserving encoding.
+  final rawSegments = rawTarget.split('/').where((s) => s.isNotEmpty).toList();
 
-  final pathBuffer = StringBuffer();
-  if (normalizedSegments.isEmpty) {
-    pathBuffer.write('/');
-  } else {
-    pathBuffer.write('/');
-    pathBuffer.writeAll(normalizedSegments, '/');
-    if (trimmed.endsWith('/')) {
-      pathBuffer.write('/');
-    }
+  // Normalize dot segments on raw string tokens.
+  final normalizedTarget = _normalizeRawSegments(rawSegments,
+      preserveTrailingSlash: rawTarget.endsWith('/'));
+
+  if (!trimmed.startsWith('/')) {
+    // Relative path: append raw target to base, then normalize dot segments.
+    final basePath = baseUri.path;
+    final baseDir = basePath.endsWith('/') ? basePath : '$basePath/';
+    final combinedSegments = '$baseDir$rawTarget'
+        .split('/')
+        .where((s) => s.isNotEmpty)
+        .toList();
+    final normalized = _normalizeRawSegments(combinedSegments,
+        preserveTrailingSlash: rawTarget.endsWith('/'));
+    final resolved = baseUri.replace(
+      path: normalized,
+      query: query,
+      fragment: fragment,
+    );
+    return resolved.toString();
   }
 
+  // Absolute path: use SabreDAV's prefix-matching semantics.
+  final basePath = baseUri.path;
+  final baseSegments =
+      basePath.split('/').where((s) => s.isNotEmpty).toList();
+
+  if (rawSegments.isEmpty) {
+    // Target is just "/" - resolve to base with trailing slash.
+    final resolved = baseUri.replace(
+      path: basePath.endsWith('/') ? basePath : '$basePath/',
+      query: query,
+      fragment: fragment,
+    );
+    return resolved.toString();
+  }
+
+  // Check if target segments start with base segments (collection-qualified).
+  final matchesPrefix = _rawSegmentsHavePrefix(rawSegments, baseSegments);
+
+  if (matchesPrefix) {
+    // Target already includes the base path prefix — use it directly.
+    final resolved = baseUri.replace(
+      path: normalizedTarget,
+      query: query,
+      fragment: fragment,
+    );
+    return resolved.toString();
+  }
+
+  // Check if first segments differ — append to base (SabreDAV behavior).
+  if (baseSegments.isNotEmpty &&
+      (rawSegments.first != baseSegments.first)) {
+    // Prepend base segments and append target segments.
+    final combined = <String>[...baseSegments, ...rawSegments];
+    final path = '/${combined.join('/')}${rawTarget.endsWith('/') ? '/' : ''}';
+    final resolved = baseUri.replace(
+      path: path,
+      query: query,
+      fragment: fragment,
+    );
+    return resolved.toString();
+  }
+
+  // Default: use target path as-is with base URI authority.
   final resolved = baseUri.replace(
-    path: pathBuffer.toString(),
-    query: targetUri.hasQuery ? targetUri.query : null,
-    fragment: targetUri.hasFragment ? targetUri.fragment : null,
+    path: normalizedTarget,
+    query: query,
+    fragment: fragment,
   );
-
   return resolved.toString();
 }
 
-bool _segmentsHavePrefix(List<String> segments, List<String> prefix) {
-  if (prefix.isEmpty) {
-    return true;
-  }
-  if (segments.length < prefix.length) {
-    return false;
-  }
+/// Check if [segments] starts with [prefix] using raw (percent-encoded) comparison.
+bool _rawSegmentsHavePrefix(List<String> segments, List<String> prefix) {
+  if (prefix.isEmpty) return true;
+  if (segments.length < prefix.length) return false;
   for (var i = 0; i < prefix.length; i++) {
-    if (segments[i] != prefix[i]) {
-      return false;
-    }
+    if (segments[i] != prefix[i]) return false;
   }
   return true;
 }
 
-List<String> _withoutTrailingEmpty(List<String> segments) {
-  var end = segments.length;
-  while (end > 0 && segments[end - 1].isEmpty) {
-    end--;
-  }
-  if (end == segments.length) {
-    return List<String>.from(segments);
-  }
-  return segments.sublist(0, end);
-}
-
-List<String> _removeDotSegments(List<String> segments) {
+/// Normalize dot segments (`.` and `..`) from raw segment tokens, preserving
+/// percent-encoding of each token.
+String _normalizeRawSegments(List<String> segments,
+    {bool preserveTrailingSlash = false}) {
   final normalized = <String>[];
   for (final segment in segments) {
-    if (segment.isEmpty || segment == '.') {
-      continue;
-    }
+    if (segment == '.') continue;
     if (segment == '..') {
-      if (normalized.isNotEmpty) {
-        normalized.removeLast();
-      }
+      if (normalized.isNotEmpty) normalized.removeLast();
       continue;
     }
     normalized.add(segment);
   }
-  return normalized;
+  if (normalized.isEmpty) return '/';
+  var result = '/${normalized.join('/')}';
+  if (preserveTrailingSlash) result = '$result/';
+  return result;
 }

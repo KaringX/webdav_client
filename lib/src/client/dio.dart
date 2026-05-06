@@ -34,8 +34,8 @@ class _WdDio with DioMixin {
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
     CancelToken? cancelToken,
-    int _redirectCount = 0,
-    int _authRetryCount = 0,
+    int redirectCount = 0,
+    int authRetryCount = 0,
   }) async {
     // options
     final options = Options(method: method);
@@ -101,7 +101,7 @@ class _WdDio with DioMixin {
               (header) => header.toLowerCase().contains('digest'),
             );
             if (digestHeader != null) {
-              if (_authRetryCount >= 1) {
+              if (authRetryCount >= 1) {
                 throw WebdavException(
                   message: 'Digest authentication failed after retry',
                   statusCode: 401,
@@ -124,8 +124,8 @@ class _WdDio with DioMixin {
                 onSendProgress: onSendProgress,
                 onReceiveProgress: onReceiveProgress,
                 cancelToken: cancelToken,
-                _redirectCount: _redirectCount,
-                _authRetryCount: _authRetryCount + 1,
+                redirectCount: redirectCount,
+                authRetryCount: authRetryCount + 1,
               );
             }
             break;
@@ -185,7 +185,7 @@ class _WdDio with DioMixin {
     } else if (_isRedirectStatus(resp.statusCode)) {
       final locations = resp.headers['location'];
       if (locations != null && locations.isNotEmpty) {
-        if (_redirectCount >= 10) {
+        if (redirectCount >= 10) {
           throw WebdavException(
             message: 'Too many redirects',
             statusCode: resp.statusCode,
@@ -207,8 +207,8 @@ class _WdDio with DioMixin {
           onSendProgress: onSendProgress,
           onReceiveProgress: onReceiveProgress,
           cancelToken: cancelToken,
-          _redirectCount: _redirectCount + 1,
-          _authRetryCount: _authRetryCount,
+          redirectCount: redirectCount + 1,
+          authRetryCount: authRetryCount,
         );
       }
     }

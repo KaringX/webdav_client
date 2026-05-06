@@ -126,7 +126,12 @@ void main() {
       final result = auth.authorize('GET', '/');
 
       expect(result, contains(r'username="u\"\\name"'));
-      expect(result, contains(r'realm="quoted\\realm"'));
+      // Per RFC 7616 §3.2.2, \r in a quoted string is an escape of "r"
+      // which yields literal "r" (only \\ and \" are special within
+      // the quoted-string grammar). So `quoted\realm` → parsed value
+      // `quotedrealm`, which when escaped for the Authorization header
+      // contains no backslashes to double.
+      expect(result, contains(r'realm="quotedrealm"'));
       expect(result, contains(r'nonce="n\"q"'));
     });
 

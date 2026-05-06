@@ -924,7 +924,7 @@ List<String> _hrefList(XmlElement? element) {
     return const <String>[];
   }
   return element
-      .findElements('href', namespace: '*')
+      .findAllElements('href', namespace: '*')
       .map((href) => href.innerText.trim())
       .where((href) => href.isNotEmpty)
       .toList(growable: false);

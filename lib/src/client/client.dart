@@ -394,7 +394,31 @@ class WebdavClient {
     String path,
     String query, {
     PropsDepth depth = PropsDepth.infinity,
-    Map<String  Future<List<String>> resourceTypes({
+    Map<String, String> namespaces = const <String, String>{},
+    Map<String, dynamic>? headers,
+    CancelToken? cancelToken,
+  }) {
+    final xmlBuilder = XmlBuilder();
+    xmlBuilder.processing('xml', 'version="1.0" encoding="utf-8"');
+    xmlBuilder.element('d:basicsearch', nest: () {
+      xmlBuilder.namespace('DAV:', 'd');
+      namespaces.forEach((prefix, uri) {
+        if (prefix == 'd') return;
+        xmlBuilder.namespace(uri, prefix);
+      });
+      xmlBuilder.xml(query);
+    });
+    return report(
+      path,
+      xmlBuilder.buildDocument().toString(),
+      depth: depth,
+      headers: headers,
+      cancelToken: cancelToken,
+    );
+  }
+
+  /// Discover DAV:resourcetype values for [path].
+  Future<List<String>> resourceTypes({
     String path = '/',
     Map<String, dynamic>? headers,
     CancelToken? cancelToken,

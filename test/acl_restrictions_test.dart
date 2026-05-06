@@ -2,6 +2,7 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
+import 'package:xml/xml.dart';
 
 void main() {
   test('aclRestrictions returns acl-restrictions element', () async {
