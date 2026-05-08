@@ -220,14 +220,11 @@ final class DigestAuth extends Auth {
 
     if (selectedQop == null || selectedQop.isEmpty || selectedQop == 'auth') {
       return _hashByAlgorithm('${digestParts.method}:${digestParts.uri}');
-    } else if (selectedQop == 'auth-int') {
-      final bodyHash = _hashByAlgorithm(entityBody ?? '');
-      return _hashByAlgorithm(
-          '${digestParts.method}:${digestParts.uri}:$bodyHash');
     }
-
-    // Default to just method and URI
-    return _hashByAlgorithm('${digestParts.method}:${digestParts.uri}');
+    // selectedQop == 'auth-int'
+    final bodyHash = _hashByAlgorithm(entityBody ?? '');
+    return _hashByAlgorithm(
+        '${digestParts.method}:${digestParts.uri}:$bodyHash');
   }
 
   String _computeResponse(String ha1, String ha2, String nc, String cnonce) {

@@ -2,12 +2,21 @@ import 'package:test/test.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
 
 void main() {
-  test('syncCollection rejects Depth infinity', () {
+  test('syncCollection rejects Depth zero', () {
+    final client = WebdavClient.noAuth(url: 'http://example.com');
+
+    expect(
+      () => client.syncCollection('/collection/', depth: PropsDepth.zero),
+      throwsA(isA<ArgumentError>()),
+    );
+  });
+
+  test('syncCollection accepts Depth infinity', () {
     final client = WebdavClient.noAuth(url: 'http://example.com');
 
     expect(
       () => client.syncCollection('/collection/', depth: PropsDepth.infinity),
-      throwsA(isA<ArgumentError>()),
+      returnsNormally,
     );
   });
 

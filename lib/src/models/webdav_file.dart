@@ -242,18 +242,34 @@ DateTime? _parseHttpDate(String? httpDate) {
       int yearIndex, int hourIndex, int minuteIndex, int secondIndex) {
     final month = _monthNumbers[match.group(monthIndex)!.toLowerCase()];
     if (month == null) return null;
+    final day = int.parse(match.group(dayIndex)!);
     var year = int.parse(match.group(yearIndex)!);
     if (year < 100) {
       year += year >= 70 ? 1900 : 2000;
     }
-    return DateTime.utc(
-      year,
-      month,
-      int.parse(match.group(dayIndex)!),
-      int.parse(match.group(hourIndex)!),
-      int.parse(match.group(minuteIndex)!),
-      int.parse(match.group(secondIndex)!),
-    ).toLocal();
+    final hour = int.parse(match.group(hourIndex)!);
+    final minute = int.parse(match.group(minuteIndex)!);
+    final second = int.parse(match.group(secondIndex)!);
+
+    // Validate numeric ranges before constructing DateTime
+    if (month < 1 || month > 12) return null;
+    final daysInMonth = DateTime(year, month + 1, 0).day;
+    if (day < 1 || day > daysInMonth) return null;
+    if (hour < 0 || hour > 23) return null;
+    if (minute < 0 || minute > 59) return null;
+    if (second < 0 || second > 59) return null;
+
+    final dt = DateTime.utc(year, month, day, hour, minute, second);
+    // DateTime.utc silently normalizes out-of-range fields; verify round-trip
+    if (dt.year != year ||
+        dt.month != month ||
+        dt.day != day ||
+        dt.hour != hour ||
+        dt.minute != minute ||
+        dt.second != second) {
+      return null;
+    }
+    return dt.toLocal();
   }
 
   final imf = RegExp(

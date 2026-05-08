@@ -349,9 +349,9 @@ class WebdavClient {
     Map<String, dynamic>? headers,
     CancelToken? cancelToken,
   }) {
-    if (depth == PropsDepth.infinity) {
+    if (depth == PropsDepth.zero) {
       throw ArgumentError(
-        'sync-collection only supports Depth 0 or 1 per RFC 6578',
+        'sync-collection only supports Depth "1" or "infinite" per RFC 6578',
       );
     }
     final xmlBuilder = XmlBuilder();
@@ -822,8 +822,10 @@ class WebdavClient {
         xmlBuilder.element('d:self');
       }
       if (matchProperty != null) {
-        xmlBuilder.element('d:prop', nest: () {
-          xmlBuilder.element(matchProperty.qualifiedName);
+        xmlBuilder.element('d:principal-property', nest: () {
+          xmlBuilder.element('d:prop', nest: () {
+            xmlBuilder.element(matchProperty.qualifiedName);
+          });
         });
       }
       xmlBuilder.element('d:prop', nest: () {
