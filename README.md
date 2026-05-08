@@ -184,9 +184,9 @@ final absolute = client.absoluteUrl('/file.txt');
 final cancel = CancelToken();
 client.mkdir('/dir', cancel)
 .catchError((err) {
-  prints(err.toString());
+  print(err.toString());
 });
-cancel.cancel('reason')
+cancel.cancel('reason');
 ```
 
 ## Testing

@@ -120,7 +120,12 @@ void main() {
 
       try {
         await client.readFile('/cancel', '${tmpDir.path}/out.bin', cancelToken: cancelToken);
-      } catch (_) {}
+        fail('Expected an exception from cancelled download');
+      } catch (e) {
+        expect(e, isException);
+        expect(await File('${tmpDir.path}/out.bin').exists(), isFalse,
+            reason: 'closeAndDelete should remove the output file');
+      }
     });
 
     test('download progress tracks total from Content-Length', () async {

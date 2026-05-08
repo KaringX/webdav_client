@@ -115,6 +115,16 @@ class _WdDio with DioMixin {
                 digestParts: DigestParts(digestHeader),
               );
 
+              // Stream bodies cannot be retried.
+              if (data is Stream) {
+                throw WebdavException(
+                  message:
+                      'Cannot retry streamed request after 401; '
+                      'use in-memory bytes for PUT requests that may require auth',
+                  statusCode: 401,
+                  response: resp,
+                );
+              }
               // Retry the request
               return req(
                 method,
@@ -197,6 +207,17 @@ class _WdDio with DioMixin {
         final redirectPath = _resolveRedirectLocation(uri, locations.first);
         if (!_canRedirectTo(uri, Uri.parse(redirectPath), resp.statusCode)) {
           return resp;
+        }
+        // 307/308 preserve the request body — streams can't be replayed.
+        if (resp.statusCode != 303 && data is Stream) {
+          throw WebdavException(
+            message:
+                'Cannot follow redirect with streamed request body; '
+                'use in-memory bytes for uploads that may be redirected',
+            statusCode: resp.statusCode,
+            statusMessage: resp.statusMessage,
+            response: resp,
+          );
         }
         final redirectMethod = resp.statusCode == 303 ? 'GET' : method;
         return req(
@@ -545,6 +566,7 @@ class _WdDio with DioMixin {
         newPath,
         cancelToken: cancelToken,
         ifHeader: ifHeader,
+        headers: headers,
       );
       return wdCopyMove(
         oldPath,
@@ -581,33 +603,6 @@ class _WdDio with DioMixin {
       cancelToken: cancelToken,
     );
     if (resp.statusCode != 200) {
-      if (resp.statusCode != null &&
-          resp.statusCode! >= 300 &&
-          resp.statusCode! < 400) {
-        final locationHeaders = resp.headers['location'];
-        if (locationHeaders != null && locationHeaders.isNotEmpty) {
-          final ret = await req(
-            'GET',
-            locationHeaders.first,
-            optionsHandler: (options) {
-              if (headers != null && headers.isNotEmpty) {
-                options.headers?.addAll(headers);
-              }
-              options.responseType = ResponseType.bytes;
-            },
-            onReceiveProgress: onProgress,
-            cancelToken: cancelToken,
-          );
-          return ret.data as Uint8List;
-        }
-
-        throw WebdavException(
-          message: 'No location header found',
-          statusCode: resp.statusCode,
-          statusMessage: resp.statusMessage,
-          response: resp,
-        );
-      }
       throw _newResponseError(resp);
     }
     return resp.data as Uint8List;
@@ -805,7 +800,7 @@ class _WdDio with DioMixin {
     CancelToken? cancelToken,
   }) async {
     // mkdir
-    await _createParent(path, cancelToken: cancelToken);
+    await _createParent(path, cancelToken: cancelToken, headers: additionalHeaders);
 
     final resp = await req(
       'PUT',
@@ -841,7 +836,7 @@ class _WdDio with DioMixin {
     CancelToken? cancelToken,
   }) async {
     // mkdir
-    await _createParent(path, cancelToken: cancelToken);
+    await _createParent(path, cancelToken: cancelToken, headers: additionalHeaders);
 
     final resp = await req(
       'PUT',
@@ -1035,6 +1030,7 @@ extension on _WdDio {
     String path, {
     CancelToken? cancelToken,
     String? ifHeader,
+    Map<String, dynamic>? headers,
   }) {
     final baseUri = Uri.parse(client.url);
 
@@ -1091,6 +1087,7 @@ extension on _WdDio {
       parentPath,
       cancelToken: cancelToken,
       ifHeader: ifHeader,
+      headers: headers,
     );
   }
 

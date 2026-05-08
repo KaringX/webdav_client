@@ -258,7 +258,7 @@ DateTime? _parseHttpDate(String? httpDate) {
 
   final imf = RegExp(
     r'^[A-Za-z]{3},\s+(\d{1,2})\s+([A-Za-z]{3})\s+(\d{4})\s+'
-    r'(\d{2}):(\d{2}):(\d{2})\s+[A-Za-z0-9:+-]+$',
+    r'(\d{2}):(\d{2}):(\d{2})\s+(?:GMT|UTC)$',
   ).firstMatch(value);
   if (imf != null) {
     return parseMatch(imf, 1, 2, 3, 4, 5, 6);
@@ -266,7 +266,7 @@ DateTime? _parseHttpDate(String? httpDate) {
 
   final rfc850 = RegExp(
     r'^[A-Za-z]+,\s+(\d{1,2})-([A-Za-z]{3})-(\d{2})\s+'
-    r'(\d{2}):(\d{2}):(\d{2})\s+[A-Za-z0-9:+-]+$',
+    r'(\d{2}):(\d{2}):(\d{2})\s+(?:GMT|UTC)$',
   ).firstMatch(value);
   if (rfc850 != null) {
     return parseMatch(rfc850, 1, 2, 3, 4, 5, 6);

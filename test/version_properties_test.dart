@@ -20,9 +20,10 @@ void main() {
         4 => '''<d:predecessor-set>
           <d:href>/versions/1</d:href><d:href>/versions/2</d:href>
         </d:predecessor-set>''',
-        _ => '''<d:successor-set>
+        5 => '''<d:successor-set>
           <d:href>/versions/4</d:href><d:href>/versions/5</d:href>
         </d:successor-set>''',
+        _ => throw AssertionError('Unexpected request count: $call'),
       };
       request.response
         ..statusCode = 207

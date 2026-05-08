@@ -408,7 +408,7 @@ class WebdavClient {
       });
       xmlBuilder.xml(query);
     });
-    return report(
+    return search(
       path,
       xmlBuilder.buildDocument().toString(),
       depth: depth,

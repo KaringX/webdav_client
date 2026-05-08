@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'dart:typed_data';
 
 import 'package:test/test.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
@@ -134,7 +135,7 @@ void main() {
     test('captures propstat-level failures with properties', () {
       const xml = '''
 <?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:d="DAV:">
+<d:multistatus xmlns:d="DAV:" xmlns:custom-ns="urn:custom">
   <d:response>
     <d:href>/mixed/</d:href>
     <d:propstat>
@@ -142,7 +143,7 @@ void main() {
       <d:status>HTTP/1.1 200 OK</d:status>
     </d:propstat>
     <d:propstat>
-      <d:prop><d:custom-ns:bad/></d:prop>
+      <d:prop><custom-ns:bad/></d:prop>
       <d:status>HTTP/1.1 403 Forbidden</d:status>
     </d:propstat>
   </d:response>
@@ -196,11 +197,11 @@ void main() {
       // Build XML where element has no prefix but has namespace
       const xml = '''
 <?xml version="1.0" encoding="utf-8"?>
-<d:multistatus xmlns:custom="http://example.com/custom">
+<d:multistatus xmlns:d="DAV:" xmlns="http://example.com/custom">
   <d:response>
     <d:href>/test</d:href>
     <d:propstat>
-      <d:prop><custom:test/></d:prop>
+      <d:prop><test/></d:prop>
       <d:status>HTTP/1.1 403 Forbidden</d:status>
     </d:propstat>
   </d:response>
@@ -212,10 +213,24 @@ void main() {
   });
 
   group('_buildIfHeader edge cases', () {
-    test('empty result when both lockToken and etag are null', () {
-      // The _buildIfHeader is private, but we can test it indirectly
-      // through conditionalPut with no lockToken and no etag
-      // Actually we need an HTTP server for this
+    test('empty result when both lockToken and etag are null', () async {
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+      addTearDown(() async => server.close(force: true));
+
+      String? capturedIf;
+      server.listen((request) async {
+        capturedIf = request.headers.value('if');
+        await request.drain();
+        request.response.statusCode = HttpStatus.created;
+        await request.response.close();
+      });
+
+      final client = WebdavClient.noAuth(
+        url: 'http://${server.address.host}:${server.port}',
+      );
+
+      await client.conditionalPut('/test', Uint8List.fromList([1]));
+      expect(capturedIf, isNull);
     });
   });
 

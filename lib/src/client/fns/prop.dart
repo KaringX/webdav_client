@@ -942,7 +942,7 @@ String _normalizeHrefForPropFind(String href) {
             uri.hasFragment
         ? uri.path
         : href;
-    return Uri.decodeFull(path);
+    return path;
   } on FormatException {
     return href;
   }

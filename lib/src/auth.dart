@@ -266,7 +266,7 @@ final class DigestAuth extends Auth {
     if (tokens.contains('auth-int')) {
       return 'auth-int';
     }
-    return tokens.first;
+    return null;
   }
 
   String _hashByAlgorithm(String data) {

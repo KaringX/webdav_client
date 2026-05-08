@@ -123,7 +123,7 @@ extension WebdavClientRead on WebdavClient {
       cancelToken: cancelToken,
     );
 
-    if (resp.statusCode != 200) {
+    if (resp.statusCode != 200 && resp.statusCode != 206) {
       throw _newResponseError(resp);
     }
     if (resp.data == null) {

@@ -93,7 +93,9 @@ void main() {
     tearDown(() async => server.close(force: true));
 
     test('write with malformed URL triggers _serverPathFromTarget fallback', () async {
+      var hits = 0;
       server.listen((request) async {
+        hits++;
         await request.drain();
         request.response.statusCode = HttpStatus.created;
         await request.response.close();
@@ -104,11 +106,11 @@ void main() {
       );
 
       // 'http://[' causes Uri.parse to throw, triggering _serverPathFromTarget
-      try {
-        await client.write('http://[', Uint8List.fromList([1]));
-      } catch (_) {
-        // Expected - malformed URL, but _serverPathFromTarget was called
-      }
+      await expectLater(
+        client.write('http://[', Uint8List.fromList([1])),
+        throwsException,
+      );
+      expect(hits, 1);
     });
   });
 }

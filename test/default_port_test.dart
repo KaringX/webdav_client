@@ -23,11 +23,10 @@ void main() {
 
       // This will trigger _createParent → _authoritiesMatch → _defaultPortForScheme
       // Then the PUT will fail (port 80 ≠ server port), but coverage is recorded
-      try {
-        await client.write('/new/dir/file.txt', Uint8List.fromList([1]));
-      } catch (_) {
-        // Expected to fail - we only care about coverage
-      }
+      await expectLater(
+        client.write('/new/dir/file.txt', Uint8List.fromList([1])),
+        throwsException,
+      );
     });
 
     test('_createParent handles target URI without port', () async {
@@ -39,14 +38,13 @@ void main() {
       // Write to absolute URL without port → resolvedUri has no port
       // _defaultPortForScheme('http') = 80, base has explicit port → mismatch
       // _createParent returns null, PUT still goes through via resolveAgainstBaseUrl
-      try {
-        await client.write(
-          'http://127.0.0.1/dir/file.txt', // no port
+      await expectLater(
+        client.write(
+          'http://127.0.0.1/dir/file.txt',
           Uint8List.fromList([1]),
-        );
-      } catch (_) {
-        // May fail but _defaultPortForScheme was called
-      }
+        ),
+        throwsException,
+      );
     });
   });
 
