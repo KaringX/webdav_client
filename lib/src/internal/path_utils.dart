@@ -78,33 +78,30 @@ String resolveAgainstBaseUrl(String baseUrl, String target) {
     // Relative path: append raw target to base, then normalize dot segments.
     final basePath = baseUri.path;
     final baseDir = basePath.endsWith('/') ? basePath : '$basePath/';
-    final combinedSegments = '$baseDir$rawTarget'
-        .split('/')
-        .where((s) => s.isNotEmpty)
-        .toList();
+    final combinedSegments =
+        '$baseDir$rawTarget'.split('/').where((s) => s.isNotEmpty).toList();
     final normalized = _normalizeRawSegments(combinedSegments,
         preserveTrailingSlash: rawTarget.endsWith('/'));
-    final resolved = baseUri.replace(
-      path: normalized,
+    return _replaceRawPath(
+      baseUri,
+      normalized,
       query: query,
       fragment: fragment,
     );
-    return resolved.toString();
   }
 
   // Absolute path: use SabreDAV's prefix-matching semantics.
   final basePath = baseUri.path;
-  final baseSegments =
-      basePath.split('/').where((s) => s.isNotEmpty).toList();
+  final baseSegments = basePath.split('/').where((s) => s.isNotEmpty).toList();
 
   if (rawSegments.isEmpty) {
     // Target is just "/" - resolve to base with trailing slash.
-    final resolved = baseUri.replace(
-      path: basePath.endsWith('/') ? basePath : '$basePath/',
+    return _replaceRawPath(
+      baseUri,
+      basePath.endsWith('/') ? basePath : '$basePath/',
       query: query,
       fragment: fragment,
     );
-    return resolved.toString();
   }
 
   // Check if target segments start with base segments (collection-qualified).
@@ -112,35 +109,34 @@ String resolveAgainstBaseUrl(String baseUrl, String target) {
 
   if (matchesPrefix) {
     // Target already includes the base path prefix — use it directly.
-    final resolved = baseUri.replace(
-      path: normalizedTarget,
+    return _replaceRawPath(
+      baseUri,
+      normalizedTarget,
       query: query,
       fragment: fragment,
     );
-    return resolved.toString();
   }
 
   // Check if first segments differ — append to base (SabreDAV behavior).
-  if (baseSegments.isNotEmpty &&
-      (rawSegments.first != baseSegments.first)) {
+  if (baseSegments.isNotEmpty && (rawSegments.first != baseSegments.first)) {
     // Prepend base segments and append target segments.
     final combined = <String>[...baseSegments, ...rawSegments];
     final path = '/${combined.join('/')}${rawTarget.endsWith('/') ? '/' : ''}';
-    final resolved = baseUri.replace(
-      path: path,
+    return _replaceRawPath(
+      baseUri,
+      path,
       query: query,
       fragment: fragment,
     );
-    return resolved.toString();
   }
 
   // Default: use target path as-is with base URI authority.
-  final resolved = baseUri.replace(
-    path: normalizedTarget,
+  return _replaceRawPath(
+    baseUri,
+    normalizedTarget,
     query: query,
     fragment: fragment,
   );
-  return resolved.toString();
 }
 
 /// Check if [segments] starts with [prefix] using raw (percent-encoded) comparison.
@@ -170,4 +166,38 @@ String _normalizeRawSegments(List<String> segments,
   var result = '/${normalized.join('/')}';
   if (preserveTrailingSlash) result = '$result/';
   return result;
+}
+
+String _replaceRawPath(
+  Uri baseUri,
+  String rawPath, {
+  String? query,
+  String? fragment,
+}) {
+  final buffer = StringBuffer();
+  if (baseUri.scheme.isNotEmpty) {
+    buffer
+      ..write(baseUri.scheme)
+      ..write(':');
+  }
+  if (baseUri.hasAuthority) {
+    buffer
+      ..write('//')
+      ..write(baseUri.authority);
+  }
+  if (!rawPath.startsWith('/')) {
+    buffer.write('/');
+  }
+  buffer.write(rawPath);
+  if (query != null) {
+    buffer
+      ..write('?')
+      ..write(query);
+  }
+  if (fragment != null) {
+    buffer
+      ..write('#')
+      ..write(fragment);
+  }
+  return buffer.toString();
 }
