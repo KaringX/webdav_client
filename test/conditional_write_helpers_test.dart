@@ -101,6 +101,73 @@ void main() {
     expect(putIf, '<http://localhost/dir/file.txt> (["etag"])');
   });
 
+  test('write does not send PUT entity headers to parent MKCOL', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() async => server.close(force: true));
+
+    String? mkcolContentType;
+    String? mkcolContentLength;
+    String? mkcolContentEncoding;
+    String? mkcolContentLanguage;
+    String? mkcolContentRange;
+    String? putContentType;
+    String? putContentLength;
+    String? putContentEncoding;
+    String? putContentLanguage;
+    String? putContentRange;
+
+    server.listen((request) async {
+      if (request.method == 'MKCOL') {
+        mkcolContentType = request.headers.value('Content-Type');
+        mkcolContentLength = request.headers.value('Content-Length');
+        mkcolContentEncoding = request.headers.value('Content-Encoding');
+        mkcolContentLanguage = request.headers.value('Content-Language');
+        mkcolContentRange = request.headers.value('Content-Range');
+        await request.drain();
+        request.response.statusCode = HttpStatus.created;
+      } else if (request.method == 'PUT') {
+        putContentType = request.headers.value('Content-Type');
+        putContentLength = request.headers.value('Content-Length');
+        putContentEncoding = request.headers.value('Content-Encoding');
+        putContentLanguage = request.headers.value('Content-Language');
+        putContentRange = request.headers.value('Content-Range');
+        await request.drain();
+        request.response.statusCode = HttpStatus.created;
+      } else {
+        await request.drain();
+        request.response.statusCode = HttpStatus.ok;
+      }
+      await request.response.close();
+    });
+
+    final client = WebdavClient.noAuth(
+      url: 'http://${server.address.host}:${server.port}',
+    );
+
+    await client.write(
+      '/dir/file.txt',
+      Uint8List.fromList([1, 2, 3]),
+      headers: const {
+        'Content-Type': 'application/custom',
+        'Content-Length': '99',
+        'Content-Encoding': 'gzip',
+        'Content-Language': 'en',
+        'Content-Range': 'bytes 0-2/3',
+      },
+    );
+
+    expect(mkcolContentType, isNot('application/custom'));
+    expect(mkcolContentLength, isNot('99'));
+    expect(mkcolContentEncoding, isNull);
+    expect(mkcolContentLanguage, isNull);
+    expect(mkcolContentRange, isNull);
+    expect(putContentType, 'application/custom');
+    expect(putContentLength, '3');
+    expect(putContentEncoding, 'gzip');
+    expect(putContentLanguage, 'en');
+    expect(putContentRange, 'bytes 0-2/3');
+  });
+
   test('updateIfMatch sends quoted If-Match etag', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(() async => server.close(force: true));

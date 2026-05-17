@@ -172,6 +172,62 @@ void main() {
     expect(bytes, [7, 8, 9]);
   });
 
+  test('cross-origin NoAuth redirect strips sensitive caller headers',
+      () async {
+    final source = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final target = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() async {
+      await source.close(force: true);
+      await target.close(force: true);
+    });
+
+    String? authorization;
+    String? cookie;
+    String? proxyAuthorization;
+    String? safeHeader;
+
+    source.listen((request) async {
+      await request.drain();
+      request.response
+        ..statusCode = HttpStatus.found
+        ..headers.set(
+          'Location',
+          'http://${target.address.host}:${target.port}/object.bin',
+        );
+      await request.response.close();
+    });
+
+    target.listen((request) async {
+      authorization = request.headers.value('Authorization');
+      cookie = request.headers.value('Cookie');
+      proxyAuthorization = request.headers.value('Proxy-Authorization');
+      safeHeader = request.headers.value('X-Trace');
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..add([1]);
+      await request.response.close();
+    });
+
+    final client = WebdavClient.noAuth(
+      url: 'http://${source.address.host}:${source.port}',
+    );
+
+    await client.read(
+      '/download',
+      headers: const {
+        'Authorization': 'Bearer caller',
+        'Cookie': 'sid=secret',
+        'Proxy-Authorization': 'Basic proxy',
+        'X-Trace': 'keep',
+      },
+    );
+
+    expect(authorization, isNull);
+    expect(cookie, isNull);
+    expect(proxyAuthorization, isNull);
+    expect(safeHeader, 'keep');
+  });
+
   test('request converts 303 redirects to GET without body', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(() async => server.close(force: true));

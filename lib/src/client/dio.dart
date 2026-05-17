@@ -36,6 +36,7 @@ class _WdDio with DioMixin {
     CancelToken? cancelToken,
     int redirectCount = 0,
     int authRetryCount = 0,
+    bool stripSensitiveRedirectHeaders = false,
   }) async {
     // options
     final options = Options(method: method);
@@ -79,6 +80,9 @@ class _WdDio with DioMixin {
     final authStr = client.auth.authorize(method, requestTarget);
     if (authStr != null) {
       options.headers?['authorization'] = authStr;
+    }
+    if (stripSensitiveRedirectHeaders) {
+      _stripSensitiveRedirectHeaders(options.headers);
     }
     final resp = await requestUri<T>(
       uri,
@@ -204,9 +208,10 @@ class _WdDio with DioMixin {
         }
         await _drainResponseData(resp.data);
         final redirectPath = _resolveRedirectLocation(uri, locations.first);
+        final redirectUri = Uri.parse(redirectPath);
         if (!_canRedirectTo(
           uri,
-          Uri.parse(redirectPath),
+          redirectUri,
           resp.statusCode,
           method,
         )) {
@@ -233,6 +238,7 @@ class _WdDio with DioMixin {
           cancelToken: cancelToken,
           redirectCount: redirectCount + 1,
           authRetryCount: authRetryCount,
+          stripSensitiveRedirectHeaders: !_sameOrigin(uri, redirectUri),
         );
       }
     }
@@ -273,6 +279,12 @@ class _WdDio with DioMixin {
   bool _isSafeRedirectMethod(String method) {
     final normalized = method.toUpperCase();
     return normalized == 'GET' || normalized == 'HEAD';
+  }
+
+  void _stripSensitiveRedirectHeaders(Map<String, dynamic>? headers) {
+    headers?.removeWhere((key, _) => _sensitiveRedirectHeaders.contains(
+          key.toLowerCase(),
+        ));
   }
 
   bool _sameOrigin(Uri a, Uri b) {
@@ -1042,7 +1054,7 @@ Map<String, dynamic>? parentMkcolHeaders(Map<String, dynamic>? headers) {
 
   final filtered = <String, dynamic>{};
   headers.forEach((key, value) {
-    if (!_putTargetConditionHeaders.contains(key.toLowerCase())) {
+    if (!_parentMkcolFilteredHeaders.contains(key.toLowerCase())) {
       filtered[key] = value;
     }
   });
@@ -1057,6 +1069,26 @@ const _putTargetConditionHeaders = <String>{
   'if-modified-since',
   'if-unmodified-since',
   'if-range',
+};
+
+const _entityHeaders = <String>{
+  'content-length',
+  'content-type',
+  'content-encoding',
+  'content-language',
+  'content-range',
+  'transfer-encoding',
+};
+
+const _parentMkcolFilteredHeaders = <String>{
+  ..._putTargetConditionHeaders,
+  ..._entityHeaders,
+};
+
+const _sensitiveRedirectHeaders = <String>{
+  'authorization',
+  'cookie',
+  'proxy-authorization',
 };
 
 bool _isSuccessfulReadStatus(int? statusCode) =>
