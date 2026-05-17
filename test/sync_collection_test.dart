@@ -47,4 +47,28 @@ void main() {
     expect(body, contains('<x:custom/>'));
     expect(response.data, '<multistatus/>');
   });
+
+  test('syncCollection emits RFC 6578 infinite sync-level', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() async => server.close(force: true));
+
+    String? body;
+
+    server.listen((request) async {
+      body = await utf8.decoder.bind(request).join();
+      request.response
+        ..statusCode = HttpStatus.multiStatus
+        ..headers.contentType = ContentType('application', 'xml')
+        ..write('<multistatus/>');
+      await request.response.close();
+    });
+
+    final client = WebdavClient.noAuth(
+      url: 'http://${server.address.host}:${server.port}',
+    );
+
+    await client.syncCollection('/collection/', depth: PropsDepth.infinity);
+
+    expect(body, contains('<d:sync-level>infinite</d:sync-level>'));
+  });
 }

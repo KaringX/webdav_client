@@ -294,7 +294,7 @@ class WebdavClient {
     );
   }
 
-  /// Subscribe to WebDAV notifications for a resource (RFC 6578).
+  /// Subscribe to Microsoft Exchange WebDAV notifications for a resource.
   Future<Response<String>> subscribe(
     String path, {
     String? callback,
@@ -318,7 +318,7 @@ class WebdavClient {
     );
   }
 
-  /// Remove a WebDAV notification subscription (RFC 6578).
+  /// Remove a Microsoft Exchange WebDAV notification subscription.
   Future<Response<String>> unsubscribe(
     String path, {
     required String subscriptionId,
@@ -359,7 +359,8 @@ class WebdavClient {
     xmlBuilder.element('d:sync-collection', nest: () {
       xmlBuilder.namespace('DAV:', 'd');
       xmlBuilder.element('d:sync-token', nest: syncToken ?? '');
-      xmlBuilder.element('d:sync-level', nest: depth.value);
+      final syncLevel = depth == PropsDepth.infinity ? 'infinite' : depth.value;
+      xmlBuilder.element('d:sync-level', nest: syncLevel);
       if (limit != null) {
         xmlBuilder.element('d:limit', nest: () {
           xmlBuilder.element('d:nresults', nest: limit.toString());
@@ -562,7 +563,8 @@ class WebdavClient {
     Map<String, dynamic>? headers,
     CancelToken? cancelToken,
   }) {
-    final resolution = resolvePropertyNames(properties, namespaceMap: namespaces);
+    final resolution =
+        resolvePropertyNames(properties, namespaceMap: namespaces);
     final xmlBuilder = XmlBuilder();
     xmlBuilder.processing('xml', 'version="1.0" encoding="utf-8"');
     xmlBuilder.element('d:$reportName', nest: () {
@@ -750,7 +752,7 @@ class WebdavClient {
     );
   }
 
-  /// Poll a resource for asynchronous WebDAV notifications (RFC 6578).
+  /// Poll a resource for asynchronous Microsoft Exchange WebDAV notifications.
   Future<Response<String>> poll(
     String path, {
     String? subscriptionId,
