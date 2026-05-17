@@ -34,6 +34,9 @@ class _WdDio with DioMixin {
     ProgressCallback? onSendProgress,
     ProgressCallback? onReceiveProgress,
     CancelToken? cancelToken,
+    int redirectCount = 0,
+    int authRetryCount = 0,
+    bool stripSensitiveRedirectHeaders = false,
   }) async {
     // options
     final options = Options(method: method);
@@ -78,6 +81,9 @@ class _WdDio with DioMixin {
     if (authStr != null) {
       options.headers?['authorization'] = authStr;
     }
+    if (stripSensitiveRedirectHeaders) {
+      _stripSensitiveRedirectHeaders(options.headers);
+    }
     final resp = await requestUri<T>(
       uri,
       options: options,
@@ -88,6 +94,7 @@ class _WdDio with DioMixin {
     );
 
     if (resp.statusCode == 401) {
+      await _drainResponseData(resp.data);
       final w3AHeaders = resp.headers[Headers.wwwAuthenticateHeader];
 
       if (w3AHeaders != null && w3AHeaders.isNotEmpty) {
@@ -98,6 +105,13 @@ class _WdDio with DioMixin {
               (header) => header.toLowerCase().contains('digest'),
             );
             if (digestHeader != null) {
+              if (authRetryCount >= 1) {
+                throw WebdavException(
+                  message: 'Digest authentication failed after retry',
+                  statusCode: 401,
+                  response: resp,
+                );
+              }
               // Create a new DigestAuth instance with the new challenge
               client.auth = DigestAuth(
                 user: digestAuth.user,
@@ -105,6 +119,15 @@ class _WdDio with DioMixin {
                 digestParts: DigestParts(digestHeader),
               );
 
+              // Stream bodies cannot be retried.
+              if (data is Stream) {
+                throw WebdavException(
+                  message: 'Cannot retry streamed request after 401; '
+                      'use in-memory bytes for PUT requests that may require auth',
+                  statusCode: 401,
+                  response: resp,
+                );
+              }
               // Retry the request
               return req(
                 method,
@@ -114,6 +137,8 @@ class _WdDio with DioMixin {
                 onSendProgress: onSendProgress,
                 onReceiveProgress: onReceiveProgress,
                 cancelToken: cancelToken,
+                redirectCount: redirectCount,
+                authRetryCount: authRetryCount + 1,
               );
             }
             break;
@@ -170,27 +195,137 @@ class _WdDio with DioMixin {
       }
 
       throw WebdavException.fromResponse(resp, 'Authentication failed');
-    } else if (resp.statusCode == 302) {
-      // Redirect
-      if (resp.headers.map.containsKey('location')) {
-        List<String>? list = resp.headers.map['location'];
-        if (list != null && list.isNotEmpty) {
-          String redirectPath = list[0];
-          // retry
-          return req(
-            method,
-            redirectPath,
-            data: data,
-            optionsHandler: optionsHandler,
-            onSendProgress: onSendProgress,
-            onReceiveProgress: onReceiveProgress,
-            cancelToken: cancelToken,
+    } else if (_isRedirectStatus(resp.statusCode)) {
+      final locations = resp.headers['location'];
+      if (locations != null && locations.isNotEmpty) {
+        if (redirectCount >= 10) {
+          throw WebdavException(
+            message: 'Too many redirects',
+            statusCode: resp.statusCode,
+            statusMessage: resp.statusMessage,
+            response: resp,
           );
         }
+        await _drainResponseData(resp.data);
+        final redirectPath = _resolveRedirectLocation(uri, locations.first);
+        final redirectUri = Uri.parse(redirectPath);
+        if (!_canRedirectTo(
+          uri,
+          redirectUri,
+          resp.statusCode,
+          method,
+        )) {
+          return resp;
+        }
+        // 307/308 preserve the request body — streams can't be replayed.
+        if (resp.statusCode != 303 && data is Stream) {
+          throw WebdavException(
+            message: 'Cannot follow redirect with streamed request body; '
+                'use in-memory bytes for uploads that may be redirected',
+            statusCode: resp.statusCode,
+            statusMessage: resp.statusMessage,
+            response: resp,
+          );
+        }
+        final redirectMethod = resp.statusCode == 303 ? 'GET' : method;
+        return req(
+          redirectMethod,
+          redirectPath,
+          data: resp.statusCode == 303 ? null : data,
+          optionsHandler: optionsHandler,
+          onSendProgress: onSendProgress,
+          onReceiveProgress: onReceiveProgress,
+          cancelToken: cancelToken,
+          redirectCount: redirectCount + 1,
+          authRetryCount: authRetryCount,
+          stripSensitiveRedirectHeaders: !_sameOrigin(uri, redirectUri),
+        );
       }
     }
 
     return resp;
+  }
+
+  /// Resolve a Location header against the URI that produced the redirect.
+  String _resolveRedirectLocation(Uri sourceUri, String location) {
+    final trimmed = location.trim();
+    if (trimmed.isEmpty) {
+      return sourceUri.toString();
+    }
+    try {
+      final target = Uri.parse(trimmed);
+      return sourceUri.resolveUri(target).toString();
+    } on FormatException {
+      return sourceUri.toString();
+    }
+  }
+
+  /// Decide whether an automatic redirect is safe for a WebDAV request.
+  bool _canRedirectTo(
+    Uri sourceUri,
+    Uri targetUri,
+    int? statusCode,
+    String method,
+  ) {
+    if (!_isRedirectStatus(statusCode)) {
+      return false;
+    }
+    if (_sameOrigin(sourceUri, targetUri)) {
+      return true;
+    }
+    return client.auth is NoAuth && _isSafeRedirectMethod(method);
+  }
+
+  bool _isSafeRedirectMethod(String method) {
+    final normalized = method.toUpperCase();
+    return normalized == 'GET' || normalized == 'HEAD';
+  }
+
+  void _stripSensitiveRedirectHeaders(Map<String, dynamic>? headers) {
+    headers?.removeWhere((key, _) => _sensitiveRedirectHeaders.contains(
+          key.toLowerCase(),
+        ));
+  }
+
+  bool _sameOrigin(Uri a, Uri b) {
+    final schemeA = a.scheme.toLowerCase();
+    final schemeB = b.scheme.toLowerCase();
+    if (schemeA != schemeB) {
+      return false;
+    }
+    if (a.host.toLowerCase() != b.host.toLowerCase()) {
+      return false;
+    }
+    int defaultPort(String scheme) {
+      switch (scheme) {
+        case 'https':
+          return 443;
+        case 'http':
+          return 80;
+        default:
+          return 0;
+      }
+    }
+
+    final portA = a.hasPort ? a.port : defaultPort(schemeA);
+    final portB = b.hasPort ? b.port : defaultPort(schemeB);
+    return portA == portB;
+  }
+
+  /// Drain stream response bodies before retrying so connections can be reused.
+  Future<void> _drainResponseData(Object? data) async {
+    if (data is ResponseBody) {
+      await data.stream.drain<void>();
+    }
+  }
+
+  /// Return true for redirect statuses commonly emitted by WebDAV frontends.
+  bool _isRedirectStatus(int? statusCode) {
+    return statusCode == 301 ||
+        statusCode == 302 ||
+        statusCode == 303 ||
+        statusCode == 307 ||
+        statusCode == 308;
   }
 
   /// Extract the request-target string (`path?query`) used by auth schemes.
@@ -225,10 +360,16 @@ class _WdDio with DioMixin {
     String path, {
     CancelToken? cancelToken,
     bool allowNotFound = false,
+    Map<String, dynamic>? headers,
   }) async {
     final resp = await req(
       'OPTIONS',
       path,
+      optionsHandler: (options) {
+        if (headers != null && headers.isNotEmpty) {
+          options.headers?.addAll(headers);
+        }
+      },
       cancelToken: cancelToken,
     );
 
@@ -259,14 +400,23 @@ class _WdDio with DioMixin {
     PropsDepth depth,
     String dataStr, {
     CancelToken? cancelToken,
+    Map<String, dynamic>? headers,
   }) async {
     final resp = await req<String>(
       'PROPFIND',
       path,
       data: dataStr,
       optionsHandler: (options) {
+        if (headers != null && headers.isNotEmpty) {
+          options.headers?.addAll(headers);
+        }
         options.headers?['depth'] = depth.value;
-        options.headers?['content-type'] = 'application/xml;charset=UTF-8';
+        if (!(options.headers?.keys.any(
+              (key) => key.toLowerCase() == Headers.contentTypeHeader,
+            ) ??
+            false)) {
+          options.headers?['content-type'] = 'application/xml;charset=UTF-8';
+        }
         options.headers?['accept'] = 'application/xml,text/xml';
         options.headers?['accept-charset'] = 'utf-8';
         options.headers?['accept-encoding'] = '';
@@ -287,17 +437,52 @@ class _WdDio with DioMixin {
   /// MKCOL
   /// Create a new collection per RFC 4918 §9.3, optionally supplying WebDAV
   /// `If` conditions such as lock tokens.
+  ///
+  /// Per RFC 4918 §9.3.1, MKCOL can accept an XML request body to set
+  /// initial properties on the newly created collection.
   Future<Response<void>> wdMkcol(
     String path, {
+    dynamic data,
     CancelToken? cancelToken,
     String? ifHeader,
+    Map<String, dynamic>? headers,
   }) {
     return req(
       'MKCOL',
       path,
+      data: data,
       optionsHandler: (options) {
+        if (headers != null && headers.isNotEmpty) {
+          options.headers?.addAll(headers);
+        }
         if (ifHeader != null && ifHeader.isNotEmpty) {
           options.headers?['If'] = ifHeader;
+        }
+        if (data != null &&
+            !(options.headers?.keys.any(
+                  (key) => key.toLowerCase() == Headers.contentTypeHeader,
+                ) ??
+                false)) {
+          options.headers?['Content-Type'] = 'application/xml;charset=UTF-8';
+        }
+      },
+      cancelToken: cancelToken,
+    );
+  }
+
+  /// HEAD
+  /// Retrieve resource metadata without a response body, per RFC 4918 §9.4.
+  Future<Response<void>> wdHead(
+    String path, {
+    Map<String, dynamic>? headers,
+    CancelToken? cancelToken,
+  }) {
+    return req<void>(
+      'HEAD',
+      path,
+      optionsHandler: (options) {
+        if (headers != null && headers.isNotEmpty) {
+          options.headers?.addAll(headers);
         }
       },
       cancelToken: cancelToken,
@@ -311,12 +496,16 @@ class _WdDio with DioMixin {
     String path, {
     CancelToken? cancelToken,
     String? ifHeader,
+    Map<String, dynamic>? headers,
   }) {
     return req<String>(
       'DELETE',
       path,
       optionsHandler: (options) {
         options.headers ??= <String, dynamic>{};
+        if (headers != null && headers.isNotEmpty) {
+          options.headers?.addAll(headers);
+        }
         options.headers?['Depth'] = 'infinity'; // RFC 4918 §9.6.1
         if (ifHeader != null && ifHeader.isNotEmpty) {
           options.headers?['If'] = ifHeader;
@@ -339,6 +528,7 @@ class _WdDio with DioMixin {
     CancelToken? cancelToken,
     PropsDepth depth = PropsDepth.infinity,
     String? ifHeader,
+    Map<String, dynamic>? headers,
   }) async {
     final method = isCopy == true ? 'COPY' : 'MOVE';
     final resp = await req(
@@ -350,6 +540,9 @@ class _WdDio with DioMixin {
           newPath,
         );
         options.headers ??= <String, dynamic>{};
+        if (headers != null && headers.isNotEmpty) {
+          options.headers?.addAll(headers);
+        }
         options.headers?['Destination'] = destinationHeader;
         options.headers?['Overwrite'] = overwrite == true ? 'T' : 'F';
         options.headers?['Depth'] = depth.value;
@@ -398,6 +591,7 @@ class _WdDio with DioMixin {
         newPath,
         cancelToken: cancelToken,
         ifHeader: ifHeader,
+        headers: headers,
       );
       return wdCopyMove(
         oldPath,
@@ -407,6 +601,7 @@ class _WdDio with DioMixin {
         cancelToken: cancelToken,
         depth: depth,
         ifHeader: ifHeader,
+        headers: headers,
       );
     } else {
       throw _newResponseError(resp);
@@ -416,40 +611,23 @@ class _WdDio with DioMixin {
   /// Fetch a resource as in-memory bytes, following redirects when necessary.
   Future<Uint8List> wdReadWithBytes(
     String path, {
+    Map<String, dynamic>? headers,
     void Function(int count, int total)? onProgress,
     CancelToken? cancelToken,
   }) async {
     final resp = await req(
       'GET',
       path,
-      optionsHandler: (options) => options.responseType = ResponseType.bytes,
+      optionsHandler: (options) {
+        if (headers != null && headers.isNotEmpty) {
+          options.headers?.addAll(headers);
+        }
+        options.responseType = ResponseType.bytes;
+      },
       onReceiveProgress: onProgress,
       cancelToken: cancelToken,
     );
-    if (resp.statusCode != 200) {
-      if (resp.statusCode != null &&
-          resp.statusCode! >= 300 &&
-          resp.statusCode! < 400) {
-        final locationHeaders = resp.headers['location'];
-        if (locationHeaders != null && locationHeaders.isNotEmpty) {
-          final ret = await req(
-            'GET',
-            locationHeaders.first,
-            optionsHandler: (options) =>
-                options.responseType = ResponseType.bytes,
-            onReceiveProgress: onProgress,
-            cancelToken: cancelToken,
-          );
-          return ret.data as Uint8List;
-        }
-
-        throw WebdavException(
-          message: 'No location header found',
-          statusCode: resp.statusCode,
-          statusMessage: resp.statusMessage,
-          response: resp,
-        );
-      }
+    if (!_isSuccessfulReadStatus(resp.statusCode)) {
       throw _newResponseError(resp);
     }
     return resp.data as Uint8List;
@@ -460,6 +638,7 @@ class _WdDio with DioMixin {
   Future<void> wdReadWithStream(
     String path,
     String savePath, {
+    Map<String, dynamic>? headers,
     void Function(int count, int total)? onProgress,
     CancelToken? cancelToken,
   }) async {
@@ -471,7 +650,12 @@ class _WdDio with DioMixin {
       resp = await req<ResponseBody>(
         'GET',
         path,
-        optionsHandler: (options) => options.responseType = ResponseType.stream,
+        optionsHandler: (options) {
+          if (headers != null && headers.isNotEmpty) {
+            options.headers?.addAll(headers);
+          }
+          options.responseType = ResponseType.stream;
+        },
         // onReceiveProgress: onProgress,
         cancelToken: cancelToken,
       );
@@ -487,7 +671,7 @@ class _WdDio with DioMixin {
       }
       rethrow;
     }
-    if (resp.statusCode != 200) {
+    if (!_isSuccessfulReadStatus(resp.statusCode)) {
       throw _newResponseError(resp);
     }
 
@@ -641,7 +825,11 @@ class _WdDio with DioMixin {
     CancelToken? cancelToken,
   }) async {
     // mkdir
-    await _createParent(path, cancelToken: cancelToken);
+    await _createParent(
+      path,
+      cancelToken: cancelToken,
+      headers: parentMkcolHeaders(additionalHeaders),
+    );
 
     final resp = await req(
       'PUT',
@@ -672,11 +860,16 @@ class _WdDio with DioMixin {
     String path,
     Stream<List<int>> data,
     int length, {
+    Map<String, dynamic>? additionalHeaders,
     void Function(int count, int total)? onProgress,
     CancelToken? cancelToken,
   }) async {
     // mkdir
-    await _createParent(path, cancelToken: cancelToken);
+    await _createParent(
+      path,
+      cancelToken: cancelToken,
+      headers: parentMkcolHeaders(additionalHeaders),
+    );
 
     final resp = await req(
       'PUT',
@@ -685,6 +878,7 @@ class _WdDio with DioMixin {
       optionsHandler: (options) {
         final headers = buildPutHeaders(
           contentLength: length,
+          additionalHeaders: additionalHeaders,
         );
         options.headers?.addAll(headers);
       },
@@ -707,6 +901,7 @@ class _WdDio with DioMixin {
     List<LockTimeout> timeoutPreferences = const <LockTimeout>[],
     PropsDepth depth = PropsDepth.infinity,
     String? ifHeader,
+    Map<String, dynamic>? headers,
     CancelToken? cancelToken,
   }) async {
     final resp = await req<String>(
@@ -715,23 +910,31 @@ class _WdDio with DioMixin {
       data: dataStr,
       optionsHandler: (options) {
         options.headers ??= <String, dynamic>{};
-        final headers = options.headers!;
+        final requestHeaders = options.headers!;
+        if (headers != null && headers.isNotEmpty) {
+          requestHeaders.addAll(headers);
+        }
 
-        headers['Timeout'] =
+        requestHeaders['Timeout'] =
             _serializeTimeoutHeader(timeout, timeoutPreferences);
         if (ifHeader != null) {
-          headers['If'] = ifHeader;
+          requestHeaders['If'] = ifHeader;
         }
 
         final hasBody = dataStr != null && dataStr.isNotEmpty;
         if (hasBody) {
-          headers['Content-Type'] = 'application/xml;charset=UTF-8';
-          headers['Depth'] = depth.value;
+          final hasContentType = requestHeaders.keys.any(
+            (key) => key.toLowerCase() == Headers.contentTypeHeader,
+          );
+          if (!hasContentType) {
+            requestHeaders['Content-Type'] = 'application/xml;charset=UTF-8';
+          }
+          requestHeaders['Depth'] = depth.value;
         } else {
-          headers.remove('Content-Type');
-          headers.remove('content-type');
-          headers.remove('Depth');
-          headers.remove('depth');
+          requestHeaders.remove('Content-Type');
+          requestHeaders.remove('content-type');
+          requestHeaders.remove('Depth');
+          requestHeaders.remove('depth');
         }
 
         options.responseType = ResponseType.plain;
@@ -751,10 +954,17 @@ class _WdDio with DioMixin {
   Future<Response<void>> wdUnlock(
     String path,
     String lockToken, {
+    Map<String, dynamic>? headers,
     CancelToken? cancelToken,
   }) async {
+    final normalizedToken = client._formatLockTokenHeader(lockToken);
     final resp = await req('UNLOCK', path, optionsHandler: (options) {
-      options.headers?['Lock-Token'] = '<$lockToken>';
+      if (headers != null && headers.isNotEmpty) {
+        options.headers?.addAll(headers);
+      }
+      options.headers?['Lock-Token'] = normalizedToken;
+      options.headers?.remove('Cache-Control');
+      options.headers?.remove('Pragma');
     }, cancelToken: cancelToken);
 
     final status = resp.statusCode;
@@ -771,13 +981,22 @@ class _WdDio with DioMixin {
     String path,
     String dataStr, {
     CancelToken? cancelToken,
+    Map<String, dynamic>? headers,
   }) async {
     final resp = await req<String>(
       'PROPPATCH',
       path,
       data: dataStr,
       optionsHandler: (options) {
-        options.headers?['content-type'] = 'application/xml;charset=UTF-8';
+        if (headers != null && headers.isNotEmpty) {
+          options.headers?.addAll(headers);
+        }
+        if (!(options.headers?.keys.any(
+              (key) => key.toLowerCase() == Headers.contentTypeHeader,
+            ) ??
+            false)) {
+          options.headers?['content-type'] = 'application/xml;charset=UTF-8';
+        }
         options.headers?['accept'] = 'application/xml,text/xml';
 
         options.responseType = ResponseType.plain;
@@ -824,6 +1043,57 @@ Map<String, dynamic> buildPutHeaders({
   return headers;
 }
 
+/// Return only headers that are safe to reuse for automatic parent MKCOL calls.
+///
+/// PUT precondition headers describe the target file and must not be evaluated
+/// against an intermediate collection created or probed before the PUT.
+Map<String, dynamic>? parentMkcolHeaders(Map<String, dynamic>? headers) {
+  if (headers == null || headers.isEmpty) {
+    return null;
+  }
+
+  final filtered = <String, dynamic>{};
+  headers.forEach((key, value) {
+    if (!_parentMkcolFilteredHeaders.contains(key.toLowerCase())) {
+      filtered[key] = value;
+    }
+  });
+
+  return filtered.isEmpty ? null : filtered;
+}
+
+const _putTargetConditionHeaders = <String>{
+  'if',
+  'if-match',
+  'if-none-match',
+  'if-modified-since',
+  'if-unmodified-since',
+  'if-range',
+};
+
+const _entityHeaders = <String>{
+  'content-length',
+  'content-type',
+  'content-encoding',
+  'content-language',
+  'content-range',
+  'transfer-encoding',
+};
+
+const _parentMkcolFilteredHeaders = <String>{
+  ..._putTargetConditionHeaders,
+  ..._entityHeaders,
+};
+
+const _sensitiveRedirectHeaders = <String>{
+  'authorization',
+  'cookie',
+  'proxy-authorization',
+};
+
+bool _isSuccessfulReadStatus(int? statusCode) =>
+    statusCode == 200 || statusCode == 206;
+
 extension on _WdDio {
   /// Extract the advertised WWW-Authenticate scheme from a challenge header.
   String? _extractAuthType(String authHeader) {
@@ -844,6 +1114,7 @@ extension on _WdDio {
     String path, {
     CancelToken? cancelToken,
     String? ifHeader,
+    Map<String, dynamic>? headers,
   }) {
     final baseUri = Uri.parse(client.url);
 
@@ -866,14 +1137,15 @@ extension on _WdDio {
       }
     }
 
-    final effectivePath = resolvedUri?.path ?? _serverPathFromTarget(path);
+    final effectivePath =
+        _encodedPath(resolvedUri) ?? _serverPathFromTarget(path);
     if (effectivePath.isEmpty) {
       return null;
     }
 
     final normalizedEffective = effectivePath.isEmpty ? '/' : effectivePath;
 
-    final basePathRaw = baseUri.path.isEmpty ? '/' : baseUri.path;
+    final basePathRaw = _encodedPath(baseUri) ?? '/';
     var basePath = basePathRaw;
     if (basePath != '/' && !basePath.endsWith('/')) {
       basePath = '$basePath/';
@@ -900,7 +1172,18 @@ extension on _WdDio {
       parentPath,
       cancelToken: cancelToken,
       ifHeader: ifHeader,
+      headers: headers,
     );
+  }
+
+  /// Return the encoded path, preserving percent-encoded segment semantics.
+  String? _encodedPath(Uri? uri) {
+    if (uri == null) {
+      return null;
+    }
+    return uri.pathSegments.isEmpty
+        ? uri.path
+        : '/${uri.pathSegments.map(Uri.encodeComponent).join('/')}';
   }
 
   /// True when the URI contains authority information (host/port).

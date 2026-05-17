@@ -21,7 +21,10 @@ class WebdavException<T extends Object?> implements Exception {
 
   @override
   String toString() {
-    return 'WebdavException: $message (Status: ${statusCode ?? "unknown"} ${statusMessage ?? ""}):\n${response?.data}';
+    final status = statusCode ?? 'unknown';
+    final reason = statusMessage ?? '';
+    return 'WebdavException: $message (Status: $status $reason):\n'
+        '${response?.data}';
   }
 
   /// Create a [WebdavException] by inspecting a raw dio [Response].
@@ -44,7 +47,13 @@ class WebdavException<T extends Object?> implements Exception {
       case 207:
         // Multi-Status (RFC 4918 §13) — parse XML payload for detailed errors.
         try {
-          final xmlDoc = XmlDocument.parse(response.data as String);
+          final body = response.data;
+          if (body is! String) {
+            errorMessage = 'Multi-Status response with errors';
+            break;
+          }
+
+          final xmlDoc = XmlDocument.parse(body);
           final errorElements = xmlDoc.findAllElements('error', namespace: '*');
           if (errorElements.isNotEmpty) {
             // Check common WebDAV preconditions/postconditions codes
@@ -72,8 +81,14 @@ class WebdavException<T extends Object?> implements Exception {
               }
             }
 
-            final firstError = errorElements.first;
-            errorMessage = 'MultiStatus error: ${firstError.innerText}';
+            errorMessage = _formatDavErrorElement(errorElements.first);
+            break;
+          }
+
+          final failures = parseMultiStatusFailureMessages(body);
+          if (failures.isNotEmpty) {
+            errorMessage = failures.join('; ');
+            break;
           }
         } catch (_) {
           errorMessage = 'Multi-Status response with errors';
@@ -81,8 +96,8 @@ class WebdavException<T extends Object?> implements Exception {
         break;
       case 422:
         // Unprocessable Entity (RFC 4918 §11.2 / §16).
-        errorMessage =
-            'Unprocessable Entity: The server understands the content type but was unable to process the contained instructions';
+        errorMessage = 'Unprocessable Entity: The server understands the '
+            'content type but was unable to process the contained instructions';
         break;
       case 423:
         // Locked (RFC 4918 §11.3).
@@ -90,12 +105,17 @@ class WebdavException<T extends Object?> implements Exception {
         break;
       case 424:
         // Failed Dependency (RFC 4918 §11.4).
-        errorMessage =
-            'Failed dependency: The method could not be performed because the requested action depended on another action that failed';
+        errorMessage = 'Failed dependency: The method could not be performed '
+            'because the requested action depended on another action that failed';
         break;
       case 507:
         // Insufficient Storage (RFC 4918 §11.5).
         errorMessage = 'Insufficient storage';
+        break;
+      case 508:
+        // Loop Detected (RFC 5842 §7.2).
+        errorMessage =
+            'Loop detected: The binding graph contains a cycle for this request';
         break;
       // Other common status codes
       case 401:
@@ -112,8 +132,8 @@ class WebdavException<T extends Object?> implements Exception {
         break;
       case 409:
         // HTTP 409 (RFC 7231 §6.5.8) — conflict with current state.
-        errorMessage =
-            'Conflict: The request could not be completed due to a conflict with the current state of the resource';
+        errorMessage = 'Conflict: The request could not be completed due to a '
+            'conflict with the current state of the resource';
         break;
       case 412:
         // HTTP 412 (RFC 7232 §4.2) — conditional headers failed.
@@ -129,6 +149,21 @@ class WebdavException<T extends Object?> implements Exception {
       response: response,
     );
   }
+}
+
+String _formatDavErrorElement(XmlElement errorElement) {
+  final children = errorElement.childElements.toList(growable: false);
+  if (children.isEmpty) {
+    final text = errorElement.innerText.trim();
+    return text.isEmpty ? 'MultiStatus error' : 'MultiStatus error: $text';
+  }
+
+  final names = children.map(_formatPropertyName).join(', ');
+  final text = errorElement.innerText.trim();
+  if (text.isEmpty) {
+    return 'MultiStatus error: $names';
+  }
+  return 'MultiStatus error: $names $text';
 }
 
 /// Helper to ensure we always translate dio errors into [WebdavException].

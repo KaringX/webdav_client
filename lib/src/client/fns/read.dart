@@ -13,6 +13,7 @@ extension WebdavClientRead on WebdavClient {
     PropsDepth depth = PropsDepth.one,
     List<String> properties = PropfindType.defaultFindProperties,
     Map<String, String> namespaces = const <String, String>{},
+    Map<String, dynamic>? headers,
     CancelToken? cancelToken,
     PropfindType findType = PropfindType.prop,
   }) async {
@@ -28,6 +29,7 @@ extension WebdavClientRead on WebdavClient {
       depth,
       xmlStr,
       cancelToken: cancelToken,
+      headers: headers,
     );
 
     final str = resp.data;
@@ -53,6 +55,7 @@ extension WebdavClientRead on WebdavClient {
     PropfindType findType = PropfindType.prop,
     List<String> properties = PropfindType.defaultFindProperties,
     Map<String, String> namespaces = const <String, String>{},
+    Map<String, dynamic>? headers,
   }) async {
     // path = _fixSlashes(path);
 
@@ -66,6 +69,7 @@ extension WebdavClientRead on WebdavClient {
       PropsDepth.zero,
       xmlStr,
       cancelToken: cancelToken,
+      headers: headers,
     );
 
     final str = resp.data;
@@ -86,14 +90,46 @@ extension WebdavClientRead on WebdavClient {
   /// - [cancelToken] for cancelling the request
   Future<Uint8List> read(
     String path, {
+    Map<String, dynamic>? headers,
     void Function(int count, int total)? onProgress,
     CancelToken? cancelToken,
   }) {
     return _client.wdReadWithBytes(
       path,
+      headers: headers,
       onProgress: onProgress,
       cancelToken: cancelToken,
     );
+  }
+
+  /// Read a file as a response stream without buffering the body in memory.
+  ///
+  /// The returned Dio [Response] exposes headers and a [ResponseBody.stream].
+  /// Callers are responsible for listening to or cancelling the stream.
+  Future<Response<ResponseBody>> readStream(
+    String path, {
+    Map<String, dynamic>? headers,
+    CancelToken? cancelToken,
+  }) async {
+    final resp = await _client.req<ResponseBody>(
+      'GET',
+      path,
+      optionsHandler: (options) {
+        if (headers != null && headers.isNotEmpty) {
+          options.headers?.addAll(headers);
+        }
+        options.responseType = ResponseType.stream;
+      },
+      cancelToken: cancelToken,
+    );
+
+    if (resp.statusCode != 200 && resp.statusCode != 206) {
+      throw _newResponseError(resp);
+    }
+    if (resp.data == null) {
+      throw _newResponseError(resp, 'Response data is null');
+    }
+    return resp;
   }
 
   /// Read the bytes of a file with stream and write to a local file
@@ -105,12 +141,14 @@ extension WebdavClientRead on WebdavClient {
   Future<void> readFile(
     String remotePath,
     String localPath, {
+    Map<String, dynamic>? headers,
     void Function(int count, int total)? onProgress,
     CancelToken? cancelToken,
   }) async {
     await _client.wdReadWithStream(
       remotePath,
       localPath,
+      headers: headers,
       onProgress: onProgress,
       cancelToken: cancelToken,
     );

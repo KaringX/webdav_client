@@ -1,6 +1,7 @@
 /// A Dart library for WebDAV client operations.
-/// This library provides a simple and efficient way to interact with WebDAV servers.
-/// It includes functionalities for authentication, file operations, and handling WebDAV-specific features.
+/// This library provides a simple and efficient way to interact with WebDAV
+/// servers. It includes authentication, file operations, and WebDAV-specific
+/// extension helpers.
 library;
 
 export 'src/auth.dart';

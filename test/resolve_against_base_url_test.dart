@@ -54,6 +54,32 @@ void main() {
       );
     });
 
+    test('does not double encode collection-qualified percent paths', () {
+      final resolved = resolveAgainstBaseUrl(
+        base,
+        '/remote.php/dav/files/alice/a%20b/',
+      );
+      expect(
+        resolved,
+        equals(
+          'https://example.com/remote.php/dav/files/alice/a%20b/',
+        ),
+      );
+    });
+
+    test('does not double encode encoded slash in path segment', () {
+      final resolved = resolveAgainstBaseUrl(
+        base,
+        '/remote.php/dav/files/alice/c%2Fd',
+      );
+      expect(
+        resolved,
+        equals(
+          'https://example.com/remote.php/dav/files/alice/c%2Fd',
+        ),
+      );
+    });
+
     test('retains query strings supplied with absolute paths', () {
       final resolved = resolveAgainstBaseUrl(
         '$base/',

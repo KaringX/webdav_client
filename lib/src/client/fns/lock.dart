@@ -1,5 +1,24 @@
 part of '../client.dart';
 
+/// Parsed DAV:activelock information from a lockdiscovery property.
+class ActiveLock {
+  final String? token;
+  final String? scope;
+  final String? type;
+  final String? depth;
+  final String? owner;
+  final String? timeout;
+
+  const ActiveLock({
+    this.token,
+    this.scope,
+    this.type,
+    this.depth,
+    this.owner,
+    this.timeout,
+  });
+}
+
 extension WebdavClientLock on WebdavClient {
   /// Lock a resource
   ///
@@ -15,9 +34,11 @@ extension WebdavClientLock on WebdavClient {
     int timeout = 3600,
     List<LockTimeout> timeoutPreferences = const <LockTimeout>[],
     String? owner,
+    String? ownerXml,
     PropsDepth depth = PropsDepth.infinity,
     String? ifHeader,
     bool refreshLock = false,
+    Map<String, dynamic>? headers,
     CancelToken? cancelToken,
   }) async {
     if (depth == PropsDepth.one) {
@@ -34,7 +55,8 @@ extension WebdavClientLock on WebdavClient {
         );
       }
 
-      // Extract the lock token from the If header so we have it even if the server doesn't return it in the response
+      // Extract the lock token from the If header so we have it even when
+      // the server omits it from the refresh response.
       final existingLockToken = _extractLockTokenFromIfHeader(ifHeader);
       if (existingLockToken == null) {
         throw WebdavException(
@@ -51,6 +73,7 @@ extension WebdavClientLock on WebdavClient {
         timeoutPreferences: timeoutPreferences,
         cancelToken: cancelToken,
         ifHeader: ifHeader,
+        headers: headers,
       );
 
       if (resp.statusCode != 200) {
@@ -72,15 +95,19 @@ extension WebdavClientLock on WebdavClient {
       xmlBuilder.element('d:locktype', nest: () {
         xmlBuilder.element('d:write');
       });
-      if (owner != null) {
-        // RFC 4918 14.17
-        // The owner XML can contain any XML content, so we need to handle URLs
+      if (ownerXml != null || owner != null) {
+        // RFC 4918 §14.17 allows arbitrary XML inside owner.
         xmlBuilder.element('d:owner', nest: () {
-          // If the owner is a URL, it must be wrapped in a <d:href> tag
-          if (owner.startsWith('http://') || owner.startsWith('https://')) {
-            xmlBuilder.element('d:href', nest: owner);
+          if (ownerXml != null) {
+            xmlBuilder.xml(ownerXml);
           } else {
-            xmlBuilder.text(owner);
+            final ownerText = owner!;
+            if (ownerText.startsWith('http://') ||
+                ownerText.startsWith('https://')) {
+              xmlBuilder.element('d:href', nest: ownerText);
+            } else {
+              xmlBuilder.text(ownerText);
+            }
           }
         });
       }
@@ -95,6 +122,7 @@ extension WebdavClientLock on WebdavClient {
       timeoutPreferences: timeoutPreferences,
       cancelToken: cancelToken,
       ifHeader: ifHeader,
+      headers: headers,
     );
 
     // Check if the lock was successful
@@ -122,6 +150,98 @@ extension WebdavClientLock on WebdavClient {
     );
   }
 
+  /// Discover supported lock entries reported for [path].
+  Future<List<(String scope, String type)>> supportedLocks(
+    String path, {
+    Map<String, dynamic>? headers,
+    CancelToken? cancelToken,
+  }) async {
+    final props = await propFind(
+      path,
+      properties: const ['supportedlock'],
+      headers: headers,
+      cancelToken: cancelToken,
+    );
+    final supported = props['{DAV:}supportedlock'];
+    if (supported == null) {
+      return const <(String, String)>[];
+    }
+
+    return supported
+        .findElements('lockentry', namespace: '*')
+        .map((entry) {
+          final scope = entry
+              .findElements('lockscope', namespace: '*')
+              .firstOrNull
+              ?.childElements
+              .firstOrNull
+              ?.name
+              .local;
+          final type = entry
+              .findElements('locktype', namespace: '*')
+              .firstOrNull
+              ?.childElements
+              .firstOrNull
+              ?.name
+              .local;
+          if (scope == null || type == null) {
+            return null;
+          }
+          return (scope, type);
+        })
+        .whereType<(String, String)>()
+        .toList(growable: false);
+  }
+
+  /// Discover active locks reported for [path].
+  Future<List<ActiveLock>> lockDiscovery(
+    String path, {
+    Map<String, dynamic>? headers,
+    CancelToken? cancelToken,
+  }) async {
+    final props = await propFind(
+      path,
+      properties: const ['lockdiscovery'],
+      headers: headers,
+      cancelToken: cancelToken,
+    );
+    final discovery = props['{DAV:}lockdiscovery'];
+    if (discovery == null) {
+      return const <ActiveLock>[];
+    }
+
+    return discovery
+        .findElements('activelock', namespace: '*')
+        .map(_parseActiveLock)
+        .toList(growable: false);
+  }
+
+  /// Refresh an existing lock using its lock token.
+  ///
+  /// RFC 4918 §9.10.2 refreshes a lock with an empty LOCK body and an `If`
+  /// header containing the submitted lock token.
+  Future<String> refreshLock(
+    String path,
+    String lockToken, {
+    int timeout = 3600,
+    List<LockTimeout> timeoutPreferences = const <LockTimeout>[],
+    PropsDepth depth = PropsDepth.infinity,
+    Map<String, dynamic>? headers,
+    CancelToken? cancelToken,
+  }) {
+    final ifHeader = _buildIfHeader(url, path, lockToken, null, false);
+    return lock(
+      path,
+      timeout: timeout,
+      timeoutPreferences: timeoutPreferences,
+      depth: depth,
+      ifHeader: ifHeader,
+      refreshLock: true,
+      headers: headers,
+      cancelToken: cancelToken,
+    );
+  }
+
   /// Unlock a resource
   ///
   /// - [path] of the resource
@@ -130,8 +250,48 @@ extension WebdavClientLock on WebdavClient {
   Future<void> unlock(
     String path,
     String lockToken, {
+    Map<String, dynamic>? headers,
     CancelToken? cancelToken,
   }) async {
-    await _client.wdUnlock(path, lockToken, cancelToken: cancelToken);
+    await _client.wdUnlock(
+      path,
+      lockToken,
+      headers: headers,
+      cancelToken: cancelToken,
+    );
   }
+}
+
+ActiveLock _parseActiveLock(XmlElement element) {
+  String? firstChildName(String container) {
+    final containerElement = element.findElements(container, namespace: '*')
+        .firstOrNull;
+    return containerElement?.childElements.firstOrNull?.name.local;
+  }
+
+  String? nestedText(String container, String child) {
+    final containerElement = element.findElements(container, namespace: '*')
+        .firstOrNull;
+    final childElement = containerElement?.findElements(child, namespace: '*')
+        .firstOrNull;
+    final text = childElement?.innerText.trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  String? directText(String name) {
+    final text = element.findElements(name, namespace: '*')
+        .firstOrNull
+        ?.innerText
+        .trim();
+    return text == null || text.isEmpty ? null : text;
+  }
+
+  return ActiveLock(
+    token: nestedText('locktoken', 'href'),
+    scope: firstChildName('lockscope'),
+    type: firstChildName('locktype'),
+    depth: directText('depth'),
+    owner: directText('owner'),
+    timeout: directText('timeout'),
+  );
 }

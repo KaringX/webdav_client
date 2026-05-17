@@ -15,7 +15,7 @@ String? getElementText(XmlElement parent, String tag) =>
 
 /// Extract an integer value from the first matching element or return `null`.
 int? getIntValue(XmlElement parent, String tag) {
-  final value = getElementText(parent, tag);
+  final value = getElementText(parent, tag)?.trim();
   return value != null ? int.tryParse(value) : null;
 }
 

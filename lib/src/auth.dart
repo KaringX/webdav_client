@@ -121,6 +121,9 @@ final class DigestAuth extends Auth {
   /// {@macro digest_auth_parts}
   String? get charset => digestParts.parts['charset'];
 
+  /// Whether the server requested RFC 7616 username hashing.
+  String? get userhash => digestParts.parts['userhash'];
+
   @override
   String authorize(String method, String path) {
     digestParts.uri = path;
@@ -142,7 +145,12 @@ final class DigestAuth extends Auth {
 
     // Build authorization header according to RFC
     final authHeader = StringBuffer('Digest');
-    _addParam(authHeader, 'username', user);
+    final useUserhash = userhash?.toLowerCase() == 'true';
+    final usernameValue = useUserhash ? _hashByAlgorithm('$user:$realm') : user;
+    _addParam(authHeader, 'username', usernameValue);
+    if (useUserhash) {
+      _addParam(authHeader, 'userhash', 'true', quote: false);
+    }
     _addParam(authHeader, 'realm', realm);
     _addParam(authHeader, 'nonce', nonce);
     _addParam(authHeader, 'uri', digestParts.uri);
@@ -152,10 +160,8 @@ final class DigestAuth extends Auth {
       _addParam(authHeader, 'algorithm', algorithm, quote: false);
     }
 
-    final qop = this.qop;
-    if (qop != null && qop.isNotEmpty) {
-      // Choose auth over auth-int if both are offered
-      String selectedQop = qop.contains('auth') ? 'auth' : qop;
+    final selectedQop = _selectedQop;
+    if (selectedQop != null && selectedQop.isNotEmpty) {
       _addParam(authHeader, 'qop', selectedQop, quote: false);
       _addParam(authHeader, 'nc', nc, quote: false);
       _addParam(authHeader, 'cnonce', cnonce);
@@ -190,61 +196,88 @@ final class DigestAuth extends Auth {
 
     sb.write('$name=');
     if (quote) sb.write('"');
-    sb.write(value);
+    sb.write(quote ? _escapeQuotedString(value) : value);
     if (quote) sb.write('"');
+  }
+
+  String _escapeQuotedString(String value) {
+    return value.replaceAll(r'\', r'\\').replaceAll('"', r'\"');
   }
 
   String _computeHA1(String cnonce) {
     final alg = algorithm?.toLowerCase();
+    final base = _hashByAlgorithm('$user:$realm:$pwd');
 
-    if (alg == null || alg == 'md5' || alg == '') {
-      return md5Hash('$user:$realm:$pwd');
-    } else if (alg == 'md5-sess') {
-      String md5Str = md5Hash('$user:$realm:$pwd');
-      return md5Hash('$md5Str:$nonce:$cnonce');
-    } else if (alg == 'sha-256') {
-      return sha256Hash('$user:$realm:$pwd');
-    } else if (alg == 'sha-256-sess') {
-      final shaStr = sha256Hash('$user:$realm:$pwd');
-      return sha256Hash('$shaStr:$nonce:$cnonce');
+    if (alg != null && alg.endsWith('-sess')) {
+      return _hashByAlgorithm('$base:$nonce:$cnonce');
     }
 
-    // Default to MD5 if algorithm not recognized
-    return md5Hash('$user:$realm:$pwd');
+    return base;
   }
 
   String _computeHA2() {
-    final qop = this.qop;
+    final selectedQop = _selectedQop;
 
-    if (qop == null || qop.isEmpty || qop == 'auth') {
+    if (selectedQop == null || selectedQop.isEmpty || selectedQop == 'auth') {
       return _hashByAlgorithm('${digestParts.method}:${digestParts.uri}');
-    } else if (qop == 'auth-int' && entityBody?.isNotEmpty == true) {
-      final bodyHash = _hashByAlgorithm(entityBody!);
-      return _hashByAlgorithm(
-          '${digestParts.method}:${digestParts.uri}:$bodyHash');
     }
-
-    // Default to just method and URI
-    return _hashByAlgorithm('${digestParts.method}:${digestParts.uri}');
+    // selectedQop == 'auth-int'
+    final bodyHash = _hashByAlgorithm(entityBody ?? '');
+    return _hashByAlgorithm(
+        '${digestParts.method}:${digestParts.uri}:$bodyHash');
   }
 
   String _computeResponse(String ha1, String ha2, String nc, String cnonce) {
-    final qop = this.qop;
+    final selectedQop = _selectedQop;
 
-    if (qop == null || qop.isEmpty) {
+    if (selectedQop == null || selectedQop.isEmpty) {
       return _hashByAlgorithm('$ha1:$nonce:$ha2');
     } else {
-      return _hashByAlgorithm('$ha1:$nonce:$nc:$cnonce:$qop:$ha2');
+      return _hashByAlgorithm('$ha1:$nonce:$nc:$cnonce:$selectedQop:$ha2');
     }
   }
 
+  /// Select a single qop token from the server's comma-separated challenge.
+  ///
+  /// RFC 7616 sends qop-options as a quoted list (for example
+  /// `qop="auth,auth-int"`), while the Authorization header and response hash
+  /// must contain exactly one chosen token. Prefer `auth` for interoperability,
+  /// falling back to `auth-int` or the first extension token.
+  String? get _selectedQop {
+    final value = qop;
+    if (value == null || value.trim().isEmpty) {
+      return null;
+    }
+
+    final tokens = value
+        .split(',')
+        .map((token) => token.trim().toLowerCase())
+        .where((token) => token.isNotEmpty)
+        .toList(growable: false);
+    if (tokens.isEmpty) {
+      return null;
+    }
+    if (tokens.contains('auth')) {
+      return 'auth';
+    }
+    if (tokens.contains('auth-int')) {
+      return 'auth-int';
+    }
+    return null;
+  }
+
   String _hashByAlgorithm(String data) {
-    final alg = algorithm?.toLowerCase();
+    var alg = algorithm?.toLowerCase();
+    if (alg != null && alg.endsWith('-sess')) {
+      alg = alg.substring(0, alg.length - '-sess'.length);
+    }
 
     if (alg != null) {
-      if (alg.startsWith('sha-512') || alg == 'sha512') {
+      if (alg == 'sha-512-256' || alg == 'sha512-256') {
+        return sha512256Hash(data);
+      } else if (alg == 'sha-512' || alg == 'sha512') {
         return sha512Hash(data);
-      } else if (alg.startsWith('sha-256') || alg == 'sha256') {
+      } else if (alg == 'sha-256' || alg == 'sha256') {
         return sha256Hash(data);
       }
     }
@@ -300,27 +333,79 @@ class DigestParts {
     'algorithm': '',
     'entityBody': '',
     'charset': '',
+    'userhash': '',
   };
 
-  /// Regular expression for parsing digest authentication header parameters
-  /// Matches key-value pairs in the format: key="value" or key=value
-  static final headerRegex = RegExp(
-    r'(\w+)=(?:"([^"]*)"|([^,]*))',
-    caseSensitive: false,
-  );
-
-  /// Parses the authentication header into key-value pairs
+  /// Parses the authentication header into key-value pairs.
   ///
-  /// Extracts all parameters from the WWW-Authenticate header
-  /// and stores them in the parts map for later use in digest calculation
-  /// @param headerData The header data string without the 'Digest ' prefix
+  /// Extracts all parameters from the WWW-Authenticate header and stores them
+  /// for later digest calculation. This parser follows RFC 7616 quoted-string
+  /// handling so commas and escaped characters inside quoted values are
+  /// preserved instead of being treated as parameter separators.
   void _parseAuthHeader(String headerData) {
-    final matches = headerRegex.allMatches(headerData);
+    var index = 0;
 
-    for (final match in matches) {
-      final key = match.group(1)!.toLowerCase();
-      final value = match.group(2) ?? match.group(3) ?? '';
-      parts[key] = value.trim();
+    void skipWhitespaceAndCommas() {
+      while (index < headerData.length) {
+        final char = headerData[index];
+        if (char == ',' || char.trim().isEmpty) {
+          index++;
+        } else {
+          break;
+        }
+      }
+    }
+
+    while (index < headerData.length) {
+      skipWhitespaceAndCommas();
+      if (index >= headerData.length) {
+        break;
+      }
+
+      final keyStart = index;
+      while (index < headerData.length && headerData[index] != '=') {
+        index++;
+      }
+      if (index >= headerData.length) {
+        break;
+      }
+
+      final key = headerData.substring(keyStart, index).trim().toLowerCase();
+      index++; // Skip '='.
+      while (index < headerData.length && headerData[index].trim().isEmpty) {
+        index++;
+      }
+
+      String value;
+      if (index < headerData.length && headerData[index] == '"') {
+        index++; // Skip opening quote.
+        final buffer = StringBuffer();
+        var escaping = false;
+        while (index < headerData.length) {
+          final char = headerData[index++];
+          if (escaping) {
+            buffer.write(char);
+            escaping = false;
+          } else if (char == '\\') {
+            escaping = true;
+          } else if (char == '"') {
+            break;
+          } else {
+            buffer.write(char);
+          }
+        }
+        value = buffer.toString();
+      } else {
+        final valueStart = index;
+        while (index < headerData.length && headerData[index] != ',') {
+          index++;
+        }
+        value = headerData.substring(valueStart, index).trim();
+      }
+
+      if (key.isNotEmpty) {
+        parts[key] = value;
+      }
     }
   }
 

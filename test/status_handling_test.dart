@@ -37,7 +37,8 @@ void main() {
       if (request.method == 'OPTIONS' && request.uri.path == '/') {
         request.response
           ..statusCode = HttpStatus.ok
-          ..headers.set('DAV', '1, 3, access-control')
+          ..headers.add('DAV', '1, 3')
+          ..headers.add('DAV', 'access-control')
           ..headers.set('Allow', 'OPTIONS, PROPFIND');
       } else {
         request.response.statusCode = HttpStatus.notFound;
@@ -51,6 +52,17 @@ void main() {
 
     final features = await client.options();
     expect(features, equals(['1', '3', 'access-control']));
+  });
+
+  test('absoluteUrl mirrors request target resolution', () {
+    final client = WebdavClient.noAuth(
+      url: 'http://example.com/remote.php/dav/files/alice/',
+    );
+
+    expect(
+      client.absoluteUrl('/Documents/report.txt'),
+      'http://example.com/remote.php/dav/files/alice/Documents/report.txt',
+    );
   });
 
   test('request helper reuses base URL and forwards headers/body', () async {

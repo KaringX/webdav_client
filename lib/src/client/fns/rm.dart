@@ -11,11 +11,13 @@ extension WebdavClientRm on WebdavClient {
     String path, {
     CancelToken? cancelToken,
     String? ifHeader,
+    Map<String, dynamic>? headers,
   }) {
     return removeAll(
       path,
       cancelToken: cancelToken,
       ifHeader: ifHeader,
+      headers: headers,
     );
   }
 
@@ -28,11 +30,13 @@ extension WebdavClientRm on WebdavClient {
     String path, {
     CancelToken? cancelToken,
     String? ifHeader,
+    Map<String, dynamic>? headers,
   }) async {
     final resp = await _client.wdDelete(
       path,
       cancelToken: cancelToken,
       ifHeader: ifHeader,
+      headers: headers,
     );
     final status = resp.statusCode ?? -1;
     if (status == 200 || status == 202 || status == 204 || status == 404) {
