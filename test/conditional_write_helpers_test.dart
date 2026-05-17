@@ -144,6 +144,8 @@ void main() {
       url: 'http://${server.address.host}:${server.port}',
     );
 
+    // WebdavClient.noAuth.write applies entity headers only to the final PUT;
+    // automatic parent MKCOL probes must stay body-less.
     await client.write(
       '/dir/file.txt',
       Uint8List.fromList([1, 2, 3]),
@@ -156,12 +158,16 @@ void main() {
       },
     );
 
-    expect(mkcolContentType, isNot('application/custom'));
-    expect(mkcolContentLength, isNot('99'));
+    expect(mkcolContentType, isNull);
+    // The client emits an empty MKCOL body, so the transport reports length 0
+    // rather than inheriting the caller supplied PUT length.
+    expect(mkcolContentLength, '0');
     expect(mkcolContentEncoding, isNull);
     expect(mkcolContentLanguage, isNull);
     expect(mkcolContentRange, isNull);
     expect(putContentType, 'application/custom');
+    // Content-Length is normalized to the actual body length, not the caller
+    // supplied override.
     expect(putContentLength, '3');
     expect(putContentEncoding, 'gzip');
     expect(putContentLanguage, 'en');
