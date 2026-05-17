@@ -52,9 +52,13 @@ void main() {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(() async => server.close(force: true));
 
+    String? method;
+    String? depth;
     String? body;
 
     server.listen((request) async {
+      method = request.method;
+      depth = request.headers.value('Depth');
       body = await utf8.decoder.bind(request).join();
       request.response
         ..statusCode = HttpStatus.multiStatus
@@ -69,6 +73,8 @@ void main() {
 
     await client.syncCollection('/collection/', depth: PropsDepth.infinity);
 
+    expect(method, 'REPORT');
+    expect(depth, 'infinity');
     expect(body, contains('<d:sync-level>infinite</d:sync-level>'));
   });
 }
