@@ -17,7 +17,8 @@ void main() {
       await server.close(force: true);
     });
 
-    test('propFind returns only successful properties for the requested resource',
+    test(
+        'propFind returns only successful properties for the requested resource',
         () async {
       String? method;
       String? depth;
@@ -99,6 +100,47 @@ void main() {
       final props = await client.propFind('/file.txt');
 
       expect(props['{DAV:}getetag']!.innerText, '"target"');
+    });
+
+    test('propFind matches percent encoded target among multiple responses',
+        () async {
+      server.listen((request) async {
+        await request.drain();
+        request.response
+          ..statusCode = 207
+          ..headers.contentType = ContentType('application', 'xml')
+          ..write('''<?xml version="1.0"?>
+<d:multistatus xmlns:d="DAV:">
+  <d:response>
+    <d:href>/a%20b/child.txt</d:href>
+    <d:propstat>
+      <d:prop><d:getetag>"child"</d:getetag></d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+  <d:response>
+    <d:href>/a%20b/</d:href>
+    <d:propstat>
+      <d:prop><d:displayname>A B</d:displayname></d:prop>
+      <d:status>HTTP/1.1 200 OK</d:status>
+    </d:propstat>
+  </d:response>
+</d:multistatus>''');
+        await request.response.close();
+      });
+
+      final client = WebdavClient.noAuth(
+        url: 'http://${server.address.host}:${server.port}',
+      );
+
+      final props = await client.propFind(
+        '/a%20b/',
+        depth: PropsDepth.one,
+      );
+
+      expect(props.keys, contains('{DAV:}displayname'));
+      expect(props.keys, isNot(contains('{DAV:}getetag')));
+      expect(props['{DAV:}displayname']!.innerText, 'A B');
     });
 
     test('propFindNames sends propname and returns successful property names',

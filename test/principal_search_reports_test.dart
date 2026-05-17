@@ -43,6 +43,39 @@ void main() {
     expect(response.data, '<multistatus/>');
   });
 
+  test('principalPropertySearch declares namespace for custom search property',
+      () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() async => server.close(force: true));
+
+    String? body;
+
+    server.listen((request) async {
+      body = await utf8.decoder.bind(request).join();
+      request.response
+        ..statusCode = HttpStatus.multiStatus
+        ..headers.contentType = ContentType('application', 'xml')
+        ..write('<multistatus/>');
+      await request.response.close();
+    });
+
+    final client = WebdavClient.noAuth(
+      url: 'http://${server.address.host}:${server.port}',
+    );
+
+    await client.principalPropertySearch(
+      '/principals/',
+      property: 'x:email',
+      match: 'alice@example.com',
+      properties: const ['displayname'],
+      namespaces: const {'x': 'http://example.com/ns'},
+    );
+
+    expect(body, contains('xmlns:x="http://example.com/ns"'));
+    expect(body, contains('<x:email/>'));
+    expect(body, contains('<d:displayname/>'));
+  });
+
   test('principalSearchPropertySet builds RFC 3744 REPORT body', () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(() async => server.close(force: true));

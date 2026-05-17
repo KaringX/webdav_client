@@ -100,7 +100,8 @@ void main() {
     );
   });
 
-  test('request does not automatically follow cross-origin redirects',
+  test(
+      'authenticated request does not automatically follow cross-origin redirects',
       () async {
     final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
     addTearDown(() async => server.close(force: true));
@@ -116,8 +117,10 @@ void main() {
       await request.response.close();
     });
 
-    final client = WebdavClient.noAuth(
+    final client = WebdavClient.basicAuth(
       url: 'http://${server.address.host}:${server.port}',
+      user: 'user',
+      pwd: 'pass',
     );
 
     final response = await client.request<String>(
@@ -128,6 +131,45 @@ void main() {
 
     expect(response.statusCode, HttpStatus.found);
     expect(count, 1);
+  });
+
+  test('NoAuth read follows cross-origin download redirects', () async {
+    final source = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    final target = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() async {
+      await source.close(force: true);
+      await target.close(force: true);
+    });
+
+    String? targetPath;
+
+    source.listen((request) async {
+      await request.drain();
+      request.response
+        ..statusCode = HttpStatus.found
+        ..headers.set(
+          'Location',
+          'http://${target.address.host}:${target.port}/object.bin',
+        );
+      await request.response.close();
+    });
+
+    target.listen((request) async {
+      targetPath = request.uri.path;
+      request.response
+        ..statusCode = HttpStatus.ok
+        ..add([7, 8, 9]);
+      await request.response.close();
+    });
+
+    final client = WebdavClient.noAuth(
+      url: 'http://${source.address.host}:${source.port}',
+    );
+
+    final bytes = await client.read('/download');
+
+    expect(targetPath, '/object.bin');
+    expect(bytes, [7, 8, 9]);
   });
 
   test('request converts 303 redirects to GET without body', () async {

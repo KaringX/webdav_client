@@ -204,7 +204,12 @@ class _WdDio with DioMixin {
         }
         await _drainResponseData(resp.data);
         final redirectPath = _resolveRedirectLocation(uri, locations.first);
-        if (!_canRedirectTo(uri, Uri.parse(redirectPath), resp.statusCode)) {
+        if (!_canRedirectTo(
+          uri,
+          Uri.parse(redirectPath),
+          resp.statusCode,
+          method,
+        )) {
           return resp;
         }
         // 307/308 preserve the request body — streams can't be replayed.
@@ -250,14 +255,24 @@ class _WdDio with DioMixin {
   }
 
   /// Decide whether an automatic redirect is safe for a WebDAV request.
-  bool _canRedirectTo(Uri sourceUri, Uri targetUri, int? statusCode) {
+  bool _canRedirectTo(
+    Uri sourceUri,
+    Uri targetUri,
+    int? statusCode,
+    String method,
+  ) {
     if (!_isRedirectStatus(statusCode)) {
       return false;
     }
-    if (!_sameOrigin(sourceUri, targetUri)) {
-      return false;
+    if (_sameOrigin(sourceUri, targetUri)) {
+      return true;
     }
-    return true;
+    return client.auth is NoAuth && _isSafeRedirectMethod(method);
+  }
+
+  bool _isSafeRedirectMethod(String method) {
+    final normalized = method.toUpperCase();
+    return normalized == 'GET' || normalized == 'HEAD';
   }
 
   bool _sameOrigin(Uri a, Uri b) {

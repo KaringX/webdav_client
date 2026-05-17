@@ -806,17 +806,20 @@ class WebdavClient {
       properties,
       namespaceMap: namespaces,
     );
-    final matchProperty = property == null
+    final matchResolution = property == null
         ? null
-        : resolvePropertyNames([property], namespaceMap: namespaces)
-            .properties
-            .single;
+        : resolvePropertyNames([property], namespaceMap: namespaces);
+    final matchProperty = matchResolution?.properties.single;
+    final namespaceDeclarations = <String, String>{
+      ...returnProperties.namespaces,
+      if (matchResolution != null) ...matchResolution.namespaces,
+    };
 
     final xmlBuilder = XmlBuilder();
     xmlBuilder.processing('xml', 'version="1.0" encoding="utf-8"');
     xmlBuilder.element('d:principal-match', nest: () {
       xmlBuilder.namespace('DAV:', 'd');
-      returnProperties.namespaces.forEach((prefix, uri) {
+      namespaceDeclarations.forEach((prefix, uri) {
         if (prefix == 'd') return;
         xmlBuilder.namespace(uri, prefix);
       });
@@ -858,23 +861,28 @@ class WebdavClient {
     final searchProperty = resolvePropertyNames(
       [property],
       namespaceMap: namespaces,
-    ).properties.single;
+    );
+    final searchPropertyName = searchProperty.properties.single;
     final returnProperties = resolvePropertyNames(
       properties,
       namespaceMap: namespaces,
     );
+    final namespaceDeclarations = <String, String>{
+      ...returnProperties.namespaces,
+      ...searchProperty.namespaces,
+    };
 
     final xmlBuilder = XmlBuilder();
     xmlBuilder.processing('xml', 'version="1.0" encoding="utf-8"');
     xmlBuilder.element('d:principal-property-search', nest: () {
       xmlBuilder.namespace('DAV:', 'd');
-      returnProperties.namespaces.forEach((prefix, uri) {
+      namespaceDeclarations.forEach((prefix, uri) {
         if (prefix == 'd') return;
         xmlBuilder.namespace(uri, prefix);
       });
       xmlBuilder.element('d:property-search', nest: () {
         xmlBuilder.element('d:prop', nest: () {
-          xmlBuilder.element(searchProperty.qualifiedName);
+          xmlBuilder.element(searchPropertyName.qualifiedName);
         });
         xmlBuilder.element('d:match', nest: match);
       });

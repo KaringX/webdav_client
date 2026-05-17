@@ -936,13 +936,19 @@ String _normalizeHrefForPropFind(String href) {
   }
   try {
     final uri = Uri.parse(href);
-    final path = uri.hasScheme ||
-            uri.hasAuthority ||
-            uri.hasQuery ||
-            uri.hasFragment
-        ? uri.path
-        : href;
-    return path;
+    final path =
+        uri.hasScheme || uri.hasAuthority || uri.hasQuery || uri.hasFragment
+            ? uri.path
+            : href;
+    return _decodePropFindHref(path);
+  } on FormatException {
+    return _decodePropFindHref(href);
+  }
+}
+
+String _decodePropFindHref(String href) {
+  try {
+    return Uri.decodeFull(href);
   } on FormatException {
     return href;
   }

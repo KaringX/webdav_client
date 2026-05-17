@@ -60,6 +60,37 @@ void main() {
     expect(body, contains('<d:displayname/>'));
   });
 
+  test('principalMatch declares namespace for custom match property', () async {
+    final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+    addTearDown(() async => server.close(force: true));
+
+    String? body;
+
+    server.listen((request) async {
+      body = await utf8.decoder.bind(request).join();
+      request.response
+        ..statusCode = HttpStatus.multiStatus
+        ..headers.contentType = ContentType('application', 'xml')
+        ..write('<multistatus/>');
+      await request.response.close();
+    });
+
+    final client = WebdavClient.noAuth(
+      url: 'http://${server.address.host}:${server.port}',
+    );
+
+    await client.principalMatch(
+      '/principals/',
+      property: 'x:foo',
+      properties: const ['displayname'],
+      namespaces: const {'x': 'http://example.com/ns'},
+    );
+
+    expect(body, contains('xmlns:x="http://example.com/ns"'));
+    expect(body, contains('<x:foo/>'));
+    expect(body, contains('<d:displayname/>'));
+  });
+
   test('principalMatch requires self or property', () {
     final client = WebdavClient.noAuth(url: 'http://example.com');
 
