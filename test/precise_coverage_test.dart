@@ -1,11 +1,9 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
-import 'package:xml/xml.dart';
 
 /// Precise tests targeting every remaining uncovered line.
 void main() {
@@ -15,7 +13,8 @@ void main() {
   // ========== client.dart:89 ==========
   group('ping error path', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('throws when OPTIONS returns non-2xx', () async {
@@ -24,7 +23,8 @@ void main() {
         request.response.statusCode = HttpStatus.serviceUnavailable;
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       expect(() => client.ping(), throwsA(isA<WebdavException>()));
     });
   });
@@ -133,7 +133,8 @@ void main() {
     });
 
     // Line 308: non-collection base, href with trailing /
-    test('non-collection href ending with / gets slash stripped (line 308)', () {
+    test('non-collection href ending with / gets slash stripped (line 308)',
+        () {
       // Base = '/dir' (no trailing /) → treatAsCollection = false
       // Href = '/dir/file/' → value = '/dir/file/' → ends with '/' → line 308!
       const xml = '''
@@ -167,15 +168,18 @@ void main() {
   // ========== prop.dart:229-231 (merge update path) ==========
   group('propFindRaw merge update path', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
-    test('merge duplicate href+status triggers update() existing branch', () async {
+    test('merge duplicate href+status triggers update() existing branch',
+        () async {
       server.listen((request) async {
         await request.drain();
         request.response
           ..statusCode = 207
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('''<?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:">
   <d:response><d:href>/merged</d:href><d:propstat><d:prop><d:displayname>Name</d:displayname></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
@@ -183,7 +187,8 @@ void main() {
 </d:multistatus>''');
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       final raw = await client.propFindRaw('/merged', depth: PropsDepth.zero);
       // Second entry triggers statusMap.update() with existing map
       expect(raw['/merged']![200]!.length, 2);
@@ -215,7 +220,8 @@ void main() {
   // ========== utils.dart:410 ==========
   group('_ensurePropPatchSuccess status check', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('setProps throws on 500 status', () async {
@@ -224,7 +230,8 @@ void main() {
         request.response.statusCode = HttpStatus.internalServerError;
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       expect(
         () => client.setProps('/f', {'d:displayname': 'x'}),
         throwsA(isA<WebdavException>()),
@@ -235,7 +242,8 @@ void main() {
   // ========== read.dart:35,37 (readDir null data) ==========
   group('readDir null data path', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('readDir with empty multistatus returns empty', () async {
@@ -243,11 +251,14 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = 207
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
-          ..write('<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
+          ..write(
+              '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       expect(await client.readDir('/'), isEmpty);
     });
   });
@@ -255,7 +266,8 @@ void main() {
   // ========== read.dart:73,75 (readProps null data) ==========
   group('readProps null data path', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('readProps returns null for empty multistatus', () async {
@@ -263,11 +275,14 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = 207
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
-          ..write('<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
+          ..write(
+              '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       expect(await client.readProps('/empty'), isNull);
     });
   });
@@ -279,7 +294,8 @@ void main() {
   // ========== dio.dart remaining ==========
   group('dio internal paths', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('wdReadWithStream with deflate encoding', () async {
@@ -291,11 +307,15 @@ void main() {
           ..add([1, 2, 3]);
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       final tmpDir = await Directory.systemTemp.createTemp('dio_deflate_');
-      addTearDown(() async { if (await tmpDir.exists()) await tmpDir.delete(recursive: true); });
+      addTearDown(() async {
+        if (await tmpDir.exists()) await tmpDir.delete(recursive: true);
+      });
       int? lastTotal;
-      await client.readFile('/d', '${tmpDir.path}/o', onProgress: (c, t) => lastTotal = t);
+      await client.readFile('/d', '${tmpDir.path}/o',
+          onProgress: (c, t) => lastTotal = t);
       expect(lastTotal, -1);
     });
 
@@ -308,11 +328,15 @@ void main() {
           ..add([1, 2, 3]);
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       final tmpDir = await Directory.systemTemp.createTemp('dio_compress_');
-      addTearDown(() async { if (await tmpDir.exists()) await tmpDir.delete(recursive: true); });
+      addTearDown(() async {
+        if (await tmpDir.exists()) await tmpDir.delete(recursive: true);
+      });
       int? lastTotal;
-      await client.readFile('/c', '${tmpDir.path}/o', onProgress: (c, t) => lastTotal = t);
+      await client.readFile('/c', '${tmpDir.path}/o',
+          onProgress: (c, t) => lastTotal = t);
       expect(lastTotal, -1);
     });
 
@@ -325,11 +349,15 @@ void main() {
           ..add([1, 2, 3]);
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       final tmpDir = await Directory.systemTemp.createTemp('dio_progress_');
-      addTearDown(() async { if (await tmpDir.exists()) await tmpDir.delete(recursive: true); });
+      addTearDown(() async {
+        if (await tmpDir.exists()) await tmpDir.delete(recursive: true);
+      });
       final p = <(int, int)>[];
-      await client.readFile('/p', '${tmpDir.path}/o', onProgress: (c, t) => p.add((c, t)));
+      await client.readFile('/p', '${tmpDir.path}/o',
+          onProgress: (c, t) => p.add((c, t)));
       expect(p, isNotEmpty);
       expect(p.last.$2, 3);
     });
@@ -342,9 +370,12 @@ void main() {
           ..add([1, 2, 3]);
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       final tmpDir = await Directory.systemTemp.createTemp('dio_cancel_');
-      addTearDown(() async { if (await tmpDir.exists()) await tmpDir.delete(recursive: true); });
+      addTearDown(() async {
+        if (await tmpDir.exists()) await tmpDir.delete(recursive: true);
+      });
       final cancel = CancelToken();
       // Cancel before the request even starts - the request may already
       // complete, so we just verify it doesn't hang
@@ -360,7 +391,8 @@ void main() {
         request.response.statusCode = HttpStatus.movedPermanently;
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       expect(() => client.read('/noloc'), throwsA(isA<WebdavException>()));
     });
   });
@@ -368,7 +400,8 @@ void main() {
   // ========== _serverPathFromTarget via _createParent ==========
   group('_serverPathFromTarget paths', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('absolute URI with http scheme extracts path', () async {
@@ -379,8 +412,10 @@ void main() {
         request.response.statusCode = HttpStatus.created;
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
-      await client.write('http://${server.address.host}:${server.port}/a/b.txt', Uint8List.fromList([1]));
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
+      await client.write('http://${server.address.host}:${server.port}/a/b.txt',
+          Uint8List.fromList([1]));
       expect(putPath, '/a/b.txt');
     });
 
@@ -392,7 +427,8 @@ void main() {
         request.response.statusCode = HttpStatus.created;
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       await client.write('/a/b/c.txt', Uint8List.fromList([1]));
       expect(mkcolPaths, contains('/a/b/'));
     });
@@ -405,7 +441,8 @@ void main() {
         request.response.statusCode = HttpStatus.created;
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       await client.write('/file.txt', Uint8List.fromList([1]));
       expect(mkcolPaths, isEmpty);
     });

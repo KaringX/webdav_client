@@ -1,8 +1,6 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
 
@@ -11,10 +9,12 @@ void main() {
   // ========== dio.dart:479-486 (wdReadWithStream WebdavException catch) ==========
   group('wdReadWithStream error paths', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
-    test('401 without WWW-Authenticate triggers WebdavException catch', () async {
+    test('401 without WWW-Authenticate triggers WebdavException catch',
+        () async {
       server.listen((request) async {
         await request.drain();
         request.response
@@ -89,10 +89,12 @@ void main() {
   // ========== dio.dart:939-970 (_serverPathFromTarget) ==========
   group('_serverPathFromTarget via malformed URL', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
-    test('write with malformed URL triggers _serverPathFromTarget fallback', () async {
+    test('write with malformed URL triggers _serverPathFromTarget fallback',
+        () async {
       var hits = 0;
       server.listen((request) async {
         hits++;

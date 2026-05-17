@@ -1,11 +1,7 @@
-import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
-import 'package:xml/xml.dart';
 
 /// Tests targeting the final uncovered lines across all source files.
 void main() {
@@ -121,12 +117,14 @@ void main() {
       final token = await client.lock(
         '/file.txt',
         refreshLock: true,
-        ifHeader: '<http://localhost/file.txt> (<opaquelocktoken:existing-token>)',
+        ifHeader:
+            '<http://localhost/file.txt> (<opaquelocktoken:existing-token>)',
       );
       expect(token, 'opaquelocktoken:existing-token');
     });
 
-    test('lock refresh extracts token from If header with opaquelocktoken', () async {
+    test('lock refresh extracts token from If header with opaquelocktoken',
+        () async {
       server.listen((request) async {
         request.response
           ..statusCode = HttpStatus.ok
@@ -143,7 +141,8 @@ void main() {
       final token = await client.lock(
         '/file.txt',
         refreshLock: true,
-        ifHeader: '<http://localhost/file.txt> (<opaquelocktoken:test-token-123>)',
+        ifHeader:
+            '<http://localhost/file.txt> (<opaquelocktoken:test-token-123>)',
       );
       expect(token, 'opaquelocktoken:test-token-123');
     });
@@ -231,7 +230,8 @@ void main() {
           ..statusCode = HttpStatus.multiStatus
           ..headers.contentType =
               ContentType('application', 'xml', charset: 'utf-8')
-          ..write('<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
+          ..write(
+              '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
         await request.response.close();
       });
 
@@ -329,7 +329,7 @@ void main() {
           ..statusCode = HttpStatus.multiStatus
           ..headers.contentType =
               ContentType('application', 'xml', charset: 'utf-8')
-          ..write('');  // empty body
+          ..write(''); // empty body
         await request.response.close();
       });
 
@@ -421,7 +421,8 @@ void main() {
 </d:multistatus>
 ''';
       final responses = parseMultiStatus(xml);
-      expect(responses.first.responseDescription, 'Some human-readable error description');
+      expect(responses.first.responseDescription,
+          'Some human-readable error description');
     });
 
     test('parses empty response description as null', () {

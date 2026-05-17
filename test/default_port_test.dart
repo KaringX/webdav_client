@@ -1,7 +1,6 @@
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
 
@@ -10,10 +9,12 @@ void main() {
   // ========== _defaultPortForScheme via _authoritiesMatch ==========
   group('_defaultPortForScheme', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
-    test('_createParent calls _defaultPortForScheme when base URI has no port', () async {
+    test('_createParent calls _defaultPortForScheme when base URI has no port',
+        () async {
       // client.url with NO port → _defaultPortForScheme will be called in _authoritiesMatch
       // But the actual HTTP request will fail because Dio tries port 80
       // _createParent is called BEFORE the PUT, so coverage is recorded
@@ -51,7 +52,8 @@ void main() {
   // ========== _serverPathFromTarget ==========
   group('_serverPathFromTarget', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('_serverPathFromTarget handles scheme with http:// URL', () async {

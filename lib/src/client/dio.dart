@@ -118,8 +118,7 @@ class _WdDio with DioMixin {
               // Stream bodies cannot be retried.
               if (data is Stream) {
                 throw WebdavException(
-                  message:
-                      'Cannot retry streamed request after 401; '
+                  message: 'Cannot retry streamed request after 401; '
                       'use in-memory bytes for PUT requests that may require auth',
                   statusCode: 401,
                   response: resp,
@@ -211,8 +210,7 @@ class _WdDio with DioMixin {
         // 307/308 preserve the request body — streams can't be replayed.
         if (resp.statusCode != 303 && data is Stream) {
           throw WebdavException(
-            message:
-                'Cannot follow redirect with streamed request body; '
+            message: 'Cannot follow redirect with streamed request body; '
                 'use in-memory bytes for uploads that may be redirected',
             statusCode: resp.statusCode,
             statusMessage: resp.statusMessage,
@@ -602,7 +600,7 @@ class _WdDio with DioMixin {
       onReceiveProgress: onProgress,
       cancelToken: cancelToken,
     );
-    if (resp.statusCode != 200) {
+    if (!_isSuccessfulReadStatus(resp.statusCode)) {
       throw _newResponseError(resp);
     }
     return resp.data as Uint8List;
@@ -646,7 +644,7 @@ class _WdDio with DioMixin {
       }
       rethrow;
     }
-    if (resp.statusCode != 200) {
+    if (!_isSuccessfulReadStatus(resp.statusCode)) {
       throw _newResponseError(resp);
     }
 
@@ -800,7 +798,11 @@ class _WdDio with DioMixin {
     CancelToken? cancelToken,
   }) async {
     // mkdir
-    await _createParent(path, cancelToken: cancelToken, headers: additionalHeaders);
+    await _createParent(
+      path,
+      cancelToken: cancelToken,
+      headers: parentMkcolHeaders(additionalHeaders),
+    );
 
     final resp = await req(
       'PUT',
@@ -836,7 +838,11 @@ class _WdDio with DioMixin {
     CancelToken? cancelToken,
   }) async {
     // mkdir
-    await _createParent(path, cancelToken: cancelToken, headers: additionalHeaders);
+    await _createParent(
+      path,
+      cancelToken: cancelToken,
+      headers: parentMkcolHeaders(additionalHeaders),
+    );
 
     final resp = await req(
       'PUT',
@@ -1010,6 +1016,37 @@ Map<String, dynamic> buildPutHeaders({
   return headers;
 }
 
+/// Return only headers that are safe to reuse for automatic parent MKCOL calls.
+///
+/// PUT precondition headers describe the target file and must not be evaluated
+/// against an intermediate collection created or probed before the PUT.
+Map<String, dynamic>? parentMkcolHeaders(Map<String, dynamic>? headers) {
+  if (headers == null || headers.isEmpty) {
+    return null;
+  }
+
+  final filtered = <String, dynamic>{};
+  headers.forEach((key, value) {
+    if (!_putTargetConditionHeaders.contains(key.toLowerCase())) {
+      filtered[key] = value;
+    }
+  });
+
+  return filtered.isEmpty ? null : filtered;
+}
+
+const _putTargetConditionHeaders = <String>{
+  'if',
+  'if-match',
+  'if-none-match',
+  'if-modified-since',
+  'if-unmodified-since',
+  'if-range',
+};
+
+bool _isSuccessfulReadStatus(int? statusCode) =>
+    statusCode == 200 || statusCode == 206;
+
 extension on _WdDio {
   /// Extract the advertised WWW-Authenticate scheme from a challenge header.
   String? _extractAuthType(String authHeader) {
@@ -1053,7 +1090,8 @@ extension on _WdDio {
       }
     }
 
-    final effectivePath = _encodedPath(resolvedUri) ?? _serverPathFromTarget(path);
+    final effectivePath =
+        _encodedPath(resolvedUri) ?? _serverPathFromTarget(path);
     if (effectivePath.isEmpty) {
       return null;
     }

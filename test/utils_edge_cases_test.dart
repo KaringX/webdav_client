@@ -1,10 +1,8 @@
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:test/test.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
-import 'package:xml/xml.dart';
 
 /// Tests targeting remaining uncovered lines in utils.dart
 void main() {
@@ -69,8 +67,7 @@ void main() {
       final responses = parseMultiStatus(xml);
       final props = responses.first.propstats.first.properties;
       expect(props.containsKey('{DAV:}displayname'), isTrue);
-      expect(
-          props.containsKey('{http://owncloud.org/ns}permissions'), isTrue);
+      expect(props.containsKey('{http://owncloud.org/ns}permissions'), isTrue);
     });
 
     test('parseMultiStatus skips propstat without prop element', () {

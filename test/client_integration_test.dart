@@ -1,11 +1,9 @@
-import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:test/test.dart';
-import 'package:webdav_client_plus/src/internal/path_utils.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
 
 void main() {
@@ -96,7 +94,8 @@ void main() {
 ''';
             request.response
               ..statusCode = HttpStatus.multiStatus
-              ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+              ..headers.contentType =
+                  ContentType('application', 'xml', charset: 'utf-8')
               ..write(body);
           } else {
             request.response.statusCode = HttpStatus.notFound;
@@ -131,7 +130,8 @@ void main() {
 ''';
             request.response
               ..statusCode = HttpStatus.multiStatus
-              ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+              ..headers.contentType =
+                  ContentType('application', 'xml', charset: 'utf-8')
               ..write(body);
           } else {
             request.response.statusCode = HttpStatus.notFound;
@@ -149,8 +149,10 @@ void main() {
           await request.drain();
           request.response
             ..statusCode = HttpStatus.multiStatus
-            ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
-            ..write('<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
+            ..headers.contentType =
+                ContentType('application', 'xml', charset: 'utf-8')
+            ..write(
+                '<?xml version="1.0" encoding="utf-8"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
           await request.response.close();
         });
 
@@ -176,7 +178,8 @@ void main() {
 ''';
           request.response
             ..statusCode = HttpStatus.multiStatus
-            ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+            ..headers.contentType =
+                ContentType('application', 'xml', charset: 'utf-8')
             ..write(body);
           await request.response.close();
         });
@@ -205,7 +208,8 @@ void main() {
 ''';
           request.response
             ..statusCode = HttpStatus.multiStatus
-            ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+            ..headers.contentType =
+                ContentType('application', 'xml', charset: 'utf-8')
             ..write(body);
           await request.response.close();
         });
@@ -389,8 +393,7 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = HttpStatus.unauthorized
-          ..headers.set(
-              'WWW-Authenticate', 'Basic realm="test"');
+          ..headers.set('WWW-Authenticate', 'Basic realm="test"');
         await request.response.close();
       });
 
@@ -415,7 +418,8 @@ void main() {
       );
     });
 
-    test('throws on 401 with non-Basic challenge when using BasicAuth', () async {
+    test('throws on 401 with non-Basic challenge when using BasicAuth',
+        () async {
       server.listen((request) async {
         await request.drain();
         request.response
@@ -474,7 +478,8 @@ void main() {
       );
     });
 
-    test('throws on 401 with non-Bearer challenge when using BearerAuth', () async {
+    test('throws on 401 with non-Bearer challenge when using BearerAuth',
+        () async {
       server.listen((request) async {
         await request.drain();
         request.response
@@ -551,7 +556,8 @@ void main() {
       );
     });
 
-    test('DigestAuth retries with empty digest challenge list falls through', () async {
+    test('DigestAuth retries with empty digest challenge list falls through',
+        () async {
       server.listen((request) async {
         await request.drain();
         request.response
@@ -664,10 +670,8 @@ void main() {
     });
 
     test('follows 3xx redirect with Location header', () async {
-      var count = 0;
       server.listen((request) async {
         await request.drain();
-        count++;
         if (request.uri.path == '/original') {
           request.response
             ..statusCode = HttpStatus.movedPermanently
@@ -990,7 +994,8 @@ void main() {
         url: 'http://${server.address.host}:${server.port}',
       );
 
-      final tmpDir = await Directory.systemTemp.createTemp('webdav_upload_fail_');
+      final tmpDir =
+          await Directory.systemTemp.createTemp('webdav_upload_fail_');
       addTearDown(() async {
         if (await tmpDir.exists()) {
           await tmpDir.delete(recursive: true);
@@ -1039,10 +1044,6 @@ void main() {
         request.response.statusCode = HttpStatus.multiStatus;
         await request.response.close();
       });
-
-      final client = WebdavClient.noAuth(
-        url: 'http://${server.address.host}:${server.port}',
-      );
 
       // readDir will call wdPropfind which expects text response
       // null data depends on Dio behavior - may or may not be testable
@@ -1516,7 +1517,8 @@ void main() {
       final token = await client.lock(
         '/file.txt',
         refreshLock: true,
-        ifHeader: '<http://localhost/file.txt> (<opaquelocktoken:existing-token>)',
+        ifHeader:
+            '<http://localhost/file.txt> (<opaquelocktoken:existing-token>)',
       );
 
       expect(token, 'opaquelocktoken:existing-token');
@@ -1799,7 +1801,8 @@ void main() {
       expect(capturedToken, '<opaquelocktoken:abc>');
     });
 
-    test('does not double-wrap an already bracketed Lock-Token header', () async {
+    test('does not double-wrap an already bracketed Lock-Token header',
+        () async {
       String? capturedToken;
 
       server.listen((request) async {
@@ -1970,7 +1973,8 @@ void main() {
 
     tearDown(() async => server.close(force: true));
 
-    test('adds cache-control when If header present without existing cache-control',
+    test(
+        'adds cache-control when If header present without existing cache-control',
         () async {
       String? capturedCacheControl;
       String? capturedPragma;
@@ -2082,7 +2086,8 @@ void main() {
       expect(mkcolPaths, isEmpty);
     });
 
-    test('skip _createParent for absolute URI with different authority', () async {
+    test('skip _createParent for absolute URI with different authority',
+        () async {
       final mkcolPaths = <String>[];
 
       server.listen((request) async {

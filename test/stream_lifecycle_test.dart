@@ -1,6 +1,5 @@
 import 'dart:async';
 import 'dart:io';
-import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 import 'package:test/test.dart';
@@ -10,7 +9,8 @@ import 'package:webdav_client_plus/webdav_client_plus.dart';
 void main() {
   group('wdReadWithStream timeout path (lines 612-622)', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('stream timeout after initial data', () async {
@@ -34,7 +34,8 @@ void main() {
       );
       client.setReceiveTimeout(500); // 500ms
 
-      final tmpDir = await Directory.systemTemp.createTemp('wd_stream_timeout_');
+      final tmpDir =
+          await Directory.systemTemp.createTemp('wd_stream_timeout_');
       addTearDown(() async {
         if (await tmpDir.exists()) await tmpDir.delete(recursive: true);
       });
@@ -49,7 +50,8 @@ void main() {
 
   group('wdReadWithStream cancel path (lines 605-607)', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('cancel token fires during stream', () async {
@@ -81,10 +83,12 @@ void main() {
 
       final cancelToken = CancelToken();
       // Cancel after a short delay
-      Future.delayed(Duration(milliseconds: 100), () => cancelToken.cancel('test'));
+      Future.delayed(
+          Duration(milliseconds: 100), () => cancelToken.cancel('test'));
 
       expect(
-        () => client.readFile('/cancel', '${tmpDir.path}/out.bin', cancelToken: cancelToken),
+        () => client.readFile('/cancel', '${tmpDir.path}/out.bin',
+            cancelToken: cancelToken),
         throwsA(anything),
       );
     });
@@ -92,7 +96,8 @@ void main() {
 
   group('wdReadWithStream onError path (lines 589-596)', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('stream error during download', () async {
@@ -126,7 +131,8 @@ void main() {
 
   group('wdReadWithStream null respData (line 496)', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('download succeeds for normal 200 response', () async {

@@ -1,8 +1,6 @@
-import 'dart:async';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
 
@@ -11,7 +9,8 @@ void main() {
   // ========== dio.dart:612-622 (wdReadWithStream receive timeout) ==========
   group('wdReadWithStream receive timeout', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     // Note: The stream-level timeout (lines 612-622) fires only when the initial
@@ -47,10 +46,12 @@ void main() {
   // ========== dio.dart:927-929 (_defaultPortForScheme https) ==========
   group('_defaultPortForScheme via HTTPS authority comparison', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
-    test('write to HTTP server from HTTPS base skips MKCOL (different scheme)', () async {
+    test('write to HTTP server from HTTPS base skips MKCOL (different scheme)',
+        () async {
       final mkcolPaths = <String>[];
       server.listen((request) async {
         if (request.method == 'MKCOL') mkcolPaths.add(request.uri.path);
@@ -76,10 +77,12 @@ void main() {
   // ========== dio.dart:939-970 (_serverPathFromTarget) ==========
   group('_serverPathFromTarget via _createParent', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
-    test('write with http:// URL extracts path via _serverPathFromTarget', () async {
+    test('write with http:// URL extracts path via _serverPathFromTarget',
+        () async {
       String? putPath;
       server.listen((request) async {
         if (request.method == 'PUT') putPath = request.uri.path;
@@ -154,7 +157,8 @@ void main() {
   // ========== prop.dart:229-231 (propFindRaw merge update) ==========
   group('propFindRaw merge path', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('duplicate href+status triggers update() existing branch', () async {
@@ -162,7 +166,8 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = 207
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('''<?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:">
   <d:response><d:href>/m</d:href><d:propstat><d:prop><d:displayname>M</d:displayname></d:prop><d:status>HTTP/1.1 200 OK</d:status></d:propstat></d:response>
@@ -170,7 +175,8 @@ void main() {
 </d:multistatus>''');
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       final raw = await client.propFindRaw('/m', depth: PropsDepth.zero);
       expect(raw['/m']![200]!.length, 2);
     });

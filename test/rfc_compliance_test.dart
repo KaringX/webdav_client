@@ -1,8 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
 
@@ -12,7 +10,8 @@ import 'package:webdav_client_plus/webdav_client_plus.dart';
 void main() {
   group('HEAD method (RFC 4918 §9.4)', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('HEAD returns resource metadata without body', () async {
@@ -108,7 +107,8 @@ void main() {
 
   group('MKCOL with request body (RFC 4918 §9.3.1)', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('MKCOL with XML body sets initial properties', () async {
@@ -117,7 +117,8 @@ void main() {
 
       server.listen((request) async {
         if (request.method == 'MKCOL') {
-          capturedBody = await request.map((data) => String.fromCharCodes(data)).join();
+          capturedBody =
+              await request.map((data) => String.fromCharCodes(data)).join();
           capturedContentType = request.headers.contentType?.toString();
           request.response.statusCode = HttpStatus.created;
         } else {
@@ -169,7 +170,8 @@ void main() {
       );
 
       expect(capturedBody, contains('<d:mkcol'));
-      expect(capturedBody, contains('<d:displayname>With Props</d:displayname>'));
+      expect(
+          capturedBody, contains('<d:displayname>With Props</d:displayname>'));
       expect(capturedBody, contains('<x:color>blue</x:color>'));
     });
 
@@ -185,7 +187,9 @@ void main() {
       );
 
       await expectLater(
-        client.mkdir('/test/', body: '<?xml version="1.0"?><d:mkcol xmlns:d="DAV:"><d:set><d:prop><d:displayname>Test</d:displayname></d:prop></d:set></d:mkcol>'),
+        client.mkdir('/test/',
+            body:
+                '<?xml version="1.0"?><d:mkcol xmlns:d="DAV:"><d:set><d:prop><d:displayname>Test</d:displayname></d:prop></d:set></d:mkcol>'),
         completes,
       );
     });

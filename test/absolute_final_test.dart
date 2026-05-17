@@ -1,7 +1,5 @@
 import 'dart:io';
-import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
 
@@ -10,7 +8,8 @@ void main() {
   // ========== lock.dart:57 (lock refresh returns 201 instead of 200) ==========
   group('lock refresh 201 path', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('lock refresh throws when wdLock returns 201', () async {
@@ -18,15 +17,18 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = HttpStatus.created // 201
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('<empty/>');
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       // wdLock returns 201 (valid for wdLock), but lock.dart:57 checks != 200
       // So for refresh, 201 should throw
       expect(
-        () => client.lock('/file.txt', refreshLock: true,
+        () => client.lock('/file.txt',
+            refreshLock: true,
             ifHeader: '<http://localhost/file.txt> (<opaquelocktoken:abc>)'),
         throwsA(isA<WebdavException>()),
       );
@@ -41,7 +43,8 @@ void main() {
 
   group('lock token extraction from body', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('lock returns 200 with locktoken/href in body (no header)', () async {
@@ -50,7 +53,8 @@ void main() {
         request.response
           ..statusCode = HttpStatus.ok
           // No Lock-Token header
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('''
 <?xml version="1.0" encoding="utf-8"?>
 <d:prop xmlns:d="DAV:">
@@ -65,7 +69,8 @@ void main() {
 ''');
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       final token = await client.lock('/file.txt');
       expect(token, 'opaquelocktoken:from-body');
     });
@@ -74,7 +79,8 @@ void main() {
   // ========== prop.dart:209,211 (propFindRaw null data) ==========
   group('propFindRaw null data handling', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('propFindRaw throws on empty multi-status body', () async {
@@ -86,7 +92,8 @@ void main() {
           ..write(''); // empty body
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       expect(() => client.propFindRaw('/test'), throwsA(anything));
     });
   });
@@ -94,7 +101,8 @@ void main() {
   // ========== prop.dart:229-231 (propFindRaw merge same href+status) ==========
   group('propFindRaw merge duplicate entries', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('merges properties under same href and status code', () async {
@@ -102,7 +110,8 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = 207
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('''
 <?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:">
@@ -124,7 +133,8 @@ void main() {
 ''');
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       final raw = await client.propFindRaw('/res', depth: PropsDepth.zero);
       expect(raw['/res']![200]!.length, 2);
     });
@@ -133,7 +143,8 @@ void main() {
   // ========== read.dart:35,37 (readDir null data) ==========
   group('readDir empty XML body', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('readDir returns empty list for empty multistatus', () async {
@@ -141,11 +152,14 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = 207
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
-          ..write('<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
+          ..write(
+              '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       final files = await client.readDir('/');
       expect(files, isEmpty);
     });
@@ -154,7 +168,8 @@ void main() {
   // ========== read.dart:73,75 (readProps null data) ==========
   group('readProps empty result', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('readProps returns null for empty multistatus', () async {
@@ -162,11 +177,14 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = 207
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
-          ..write('<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
+          ..write(
+              '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       final props = await client.readProps('/empty');
       expect(props, isNull);
     });
@@ -196,7 +214,8 @@ void main() {
   // ========== utils.dart:410 ==========
   group('_ensurePropPatchSuccess error check', () {
     late HttpServer server;
-    setUp(() async => server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
+    setUp(() async =>
+        server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0));
     tearDown(() async => server.close(force: true));
 
     test('setProps throws on non-2xx status', () async {
@@ -205,7 +224,8 @@ void main() {
         request.response.statusCode = HttpStatus.internalServerError;
         await request.response.close();
       });
-      final client = WebdavClient.noAuth(url: 'http://${server.address.host}:${server.port}');
+      final client = WebdavClient.noAuth(
+          url: 'http://${server.address.host}:${server.port}');
       expect(
         () => client.setProps('/file', {'d:displayname': 'x'}),
         throwsA(isA<WebdavException>()),
@@ -279,7 +299,8 @@ void main() {
       expect(files.first.name, 'child');
     });
 
-    test('non-collection href with trailing slash gets it stripped (line 308)', () {
+    test('non-collection href with trailing slash gets it stripped (line 308)',
+        () {
       const xml = '''
 <?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:">

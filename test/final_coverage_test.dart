@@ -1,9 +1,6 @@
-import 'dart:async';
-import 'dart:convert';
 import 'dart:io';
 import 'dart:typed_data';
 
-import 'package:dio/dio.dart';
 import 'package:test/test.dart';
 import 'package:webdav_client_plus/webdav_client_plus.dart';
 
@@ -22,8 +19,10 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = HttpStatus.multiStatus
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
-          ..write('<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
+          ..write(
+              '<?xml version="1.0"?><d:multistatus xmlns:d="DAV:"></d:multistatus>');
         await request.response.close();
       });
 
@@ -148,7 +147,8 @@ void main() {
         url: 'http://${server.address.host}:${server.port}',
       );
 
-      final tmpDir = await Directory.systemTemp.createTemp('webdav_stream_test_');
+      final tmpDir =
+          await Directory.systemTemp.createTemp('webdav_stream_test_');
       addTearDown(() async {
         if (await tmpDir.exists()) await tmpDir.delete(recursive: true);
       });
@@ -211,7 +211,8 @@ void main() {
         request.response
           ..statusCode = HttpStatus.ok
           ..headers.set('Lock-Token', '<opaquelocktoken:tok>')
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('<empty/>');
         await request.response.close();
       });
@@ -236,7 +237,8 @@ void main() {
         request.response
           ..statusCode = HttpStatus.ok
           ..headers.set('Lock-Token', '<opaquelocktoken:tok>')
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('<empty/>');
         await request.response.close();
       });
@@ -290,7 +292,8 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = HttpStatus.ok
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('''
 <?xml version="1.0"?>
 <root>
@@ -326,7 +329,8 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = HttpStatus.ok
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('<empty/>');
         await request.response.close();
       });
@@ -355,7 +359,8 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = HttpStatus.multiStatus
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('''
 <?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:">
@@ -394,7 +399,8 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = HttpStatus.multiStatus
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('''
 <?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:">
@@ -434,7 +440,8 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = HttpStatus.multiStatus
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('''
 <?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:">
@@ -481,7 +488,8 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = HttpStatus.multiStatus
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('''
 <?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:">
@@ -527,7 +535,8 @@ void main() {
         await request.drain();
         request.response
           ..statusCode = HttpStatus.multiStatus
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('''
 <?xml version="1.0" encoding="utf-8"?>
 <d:multistatus xmlns:d="DAV:">
@@ -596,7 +605,8 @@ void main() {
         request.response
           ..statusCode = HttpStatus.ok
           ..headers.set('Lock-Token', '  <opaquelocktoken:trimmed>  ')
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('<empty/>');
         await request.response.close();
       });
@@ -618,7 +628,8 @@ void main() {
         request.response
           ..statusCode = HttpStatus.ok
           ..headers.set('Lock-Token', 'urn:uuid:bare-token')
-          ..headers.contentType = ContentType('application', 'xml', charset: 'utf-8')
+          ..headers.contentType =
+              ContentType('application', 'xml', charset: 'utf-8')
           ..write('<empty/>');
         await request.response.close();
       });
