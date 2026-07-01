@@ -75,6 +75,10 @@ class WebdavClient {
   }) : auth = const NoAuth();
 
   // methods--------------------------------
+  void setHttpClientAdapter(HttpClientAdapter adapter) {
+    //karing
+    _client.httpClientAdapter = adapter;
+  }
 
   /// Set the public request headers
   void setHeaders(Map<String, dynamic> headers) =>
