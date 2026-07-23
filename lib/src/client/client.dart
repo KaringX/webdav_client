@@ -80,6 +80,11 @@ class WebdavClient {
     _client.httpClientAdapter = adapter;
   }
 
+  void setFollowRedirects(bool followRedirects) {
+    //karing
+    _client.options.followRedirects = followRedirects;
+  }
+
   /// Set the public request headers
   void setHeaders(Map<String, dynamic> headers) =>
       _client.options.headers = headers;
